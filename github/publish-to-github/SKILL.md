@@ -110,3 +110,24 @@ export PATH="/c/Program Files/GitHub CLI:$PATH"
 git config user.name "名字"
 git config user.email "邮箱"
 ```
+
+### 坑#6: Ruleset 会阻止仓库管理员推送
+
+创建 Ruleset 后，默认 bypass list 为空，连仓库管理员（owner）push main 分支也会被拒绝：`remote: Changes must be made through a pull request.`
+
+解法：创建 Ruleset 后，必须在 **Bypass list** 区域添加 bypass：
+- 点 **Add bypass** → 选 **Role** → **Repository admin**（或 Organization admin）
+- 或者直接搜索添加仓库 owner 的用户名
+- 如果 bypass 列表里没有合适的选项，临时方案：把 Enforcement status 改为 Disabled → push → 再改回 Active
+
+### 坑#7: GitHub API 创建仓库可能仍 403
+
+即使 Fine-grained token 的 Administration 权限设为 Read and write，通过 API（curl/gh api）创建仓库仍可能返回 403。gh CLI 的 `gh repo create` 也受此限制。
+
+解法：让用户在浏览器 github.com/new 手动创建空仓库（不勾选 README/gitignore/license），然后本地 git push。
+
+### 坑#8: 敏感信息扫描用 delegate_task 并行
+
+100+ 文件的安全扫描用 search_files 逐项搜很慢。用 delegate_task 批量派两个子任务并行扫描（一个扫 API key/token，一个扫个人隐私），效率翻倍。
+
+解法：参见本 skill 第一步的描述，两个 subagent 并行扫描不同类别的敏感信息。
