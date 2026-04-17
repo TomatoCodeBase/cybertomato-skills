@@ -1,0 +1,27 @@
+# Editor / OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Backup files
+*.bak
+*.bak2
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Node
+node_modules/
+
+# Logs
+*.log
+
+# Temp files
+*.tmp
+*.temp
+
+# Hermes internal (not skills content)
+.bundled_manifest

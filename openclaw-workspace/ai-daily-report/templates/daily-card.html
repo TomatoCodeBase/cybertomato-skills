@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: #0a0a0a;
+    display: flex; justify-content: center; padding: 40px 0;
+  }
+  .card {
+    width: 1080px; min-height: 1440px;
+    background: linear-gradient(165deg, #0f0f0f 0%, #1a0a0a 40%, #0a0f1a 100%);
+    border-radius: 24px; overflow: hidden; position: relative;
+  }
+  .card::before {
+    content: ''; position: absolute; top: -100px; right: -100px;
+    width: 400px; height: 400px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,60,60,0.12) 0%, transparent 70%);
+  }
+  .card::after {
+    content: ''; position: absolute; bottom: -80px; left: -80px;
+    width: 300px; height: 300px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(60,100,255,0.08) 0%, transparent 70%);
+  }
+
+  /* Header */
+  .header {
+    padding: 56px 56px 40px; position: relative; z-index: 1;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .brand {
+    display: flex; align-items: center; gap: 14px; margin-bottom: 24px;
+  }
+  .brand-icon {
+    width: 44px; height: 44px; border-radius: 12px;
+    background: linear-gradient(135deg, #ff3c3c, #ff6b35);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; color: #fff; font-weight: 900;
+  }
+  .brand-name { color: #fff; font-size: 20px; font-weight: 700; letter-spacing: 2px; }
+  .brand-tag {
+    margin-left: auto; padding: 6px 16px; border-radius: 20px;
+    background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.5);
+    font-size: 13px; font-weight: 500;
+  }
+  .title {
+    font-size: 38px; font-weight: 900; color: #fff;
+    line-height: 1.35; letter-spacing: 1px;
+  }
+  .title .highlight { color: #ff5252; }
+  .subtitle {
+    margin-top: 12px; color: rgba(255,255,255,0.35);
+    font-size: 15px; font-weight: 400;
+  }
+
+  /* Sections */
+  .content { padding: 36px 56px 56px; position: relative; z-index: 1; }
+  .section { margin-bottom: 36px; }
+  .section:last-child { margin-bottom: 0; }
+  .section-header {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 18px;
+  }
+  .section-badge {
+    padding: 5px 14px; border-radius: 8px; font-size: 13px;
+    font-weight: 700; letter-spacing: 1px;
+  }
+  .badge-s { background: linear-gradient(135deg, #ff3c3c, #ff5252); color: #fff; }
+  .badge-a { background: linear-gradient(135deg, #ff9800, #ffb74d); color: #1a1a1a; }
+  .badge-b { background: linear-gradient(135deg, #448aff, #64b5f6); color: #fff; }
+  .badge-c { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.5); }
+  .section-title { color: rgba(255,255,255,0.6); font-size: 14px; font-weight: 500; }
+
+  /* News Items */
+  .news-item {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 16px; padding: 22px 24px; margin-bottom: 14px;
+    transition: all 0.2s;
+  }
+  .news-item:last-child { margin-bottom: 0; }
+  .news-headline {
+    font-size: 17px; font-weight: 700; color: #fff;
+    line-height: 1.5; margin-bottom: 8px;
+  }
+  .news-summary {
+    font-size: 14px; color: rgba(255,255,255,0.45);
+    line-height: 1.65;
+    display: -webkit-box; -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .news-tag {
+    display: inline-block; margin-top: 10px;
+    padding: 3px 10px; border-radius: 6px; font-size: 11px;
+    font-weight: 500; background: rgba(255,255,255,0.05);
+    color: rgba(255,255,255,0.35);
+  }
+
+  /* Compact items for B/C level */
+  .compact-list { display: flex; flex-direction: column; gap: 10px; }
+  .compact-item {
+    display: flex; align-items: flex-start; gap: 14px;
+    padding: 14px 18px; border-radius: 12px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.04);
+  }
+  .compact-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #ff5252; margin-top: 8px; flex-shrink: 0;
+  }
+  .compact-dot.orange { background: #ff9800; }
+  .compact-dot.blue { background: #448aff; }
+  .compact-text {
+    font-size: 14px; color: rgba(255,255,255,0.6);
+    line-height: 1.5; font-weight: 500;
+  }
+  .compact-text strong { color: #fff; font-weight: 700; }
+
+  /* Footer */
+  .footer {
+    padding: 0 56px 48px; position: relative; z-index: 1;
+    display: flex; justify-content: space-between; align-items: center;
+    border-top: 1px solid rgba(255,255,255,0.04);
+    padding-top: 28px;
+  }
+  .footer-left { color: rgba(255,255,255,0.2); font-size: 12px; line-height: 1.8; }
+  .footer-right {
+    color: rgba(255,255,255,0.15); font-size: 12px;
+    text-align: right; line-height: 1.8;
+  }
+  .qr-placeholder {
+    width: 80px; height: 80px; border-radius: 12px;
+    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06);
+    display: flex; align-items: center; justify-content: center;
+    color: rgba(255,255,255,0.15); font-size: 11px; margin-top: 8px;
+  }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="header">
+    <div class="brand">
+      <div class="brand-icon">🍅</div>
+      <span class="brand-name">赛博番茄</span>
+      <span class="brand-tag">每日AI</span>
+    </div>
+    <div class="title">
+      Claude<span class="highlight">强实名</span>引爆全网<br>
+      OpenAI暗放<span class="highlight">GPT-5.4</span>
+    </div>
+    <div class="subtitle">2026-04-17 周四 · AI行业安全与竞赛同时失控</div>
+  </div>
+
+  <div class="content">
+    <!-- S级 -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-badge badge-s">S</span>
+        <span class="section-title">今日重点</span>
+      </div>
+      <div class="news-item">
+        <div class="news-headline">Claude强制手持证件自拍验证，不通过直接封号</div>
+        <div class="news-summary">Anthropic实施史上最严身份验证，必须真人手持证件自拍。同日登上Nature发表"潜意识传染"安全研究。Anthropic正从技术和管理两端构建安全壁垒，但代价是隐私让步。</div>
+        <span class="news-tag">安全与监管</span>
+      </div>
+      <div class="news-item">
+        <div class="news-headline">超20万台AI服务器暴露风险，MCP协议曝严重设计缺陷</div>
+        <div class="news-summary">MCP作为Agent生态基础协议层被曝可导致推理过程泄露敏感信息，直接威胁Agent赛道信任根基。同日NewAPI被曝高危支付漏洞——安全是今日主旋律。</div>
+        <span class="news-tag">安全与监管</span>
+      </div>
+      <div class="news-item">
+        <div class="news-headline">OpenAI发布GPT-5.4 + Agents SDK，Codex同款框架全面开放</div>
+        <div class="news-summary">开发者可用与Codex相同的代码执行框架构建AI Agent。OpenAI正在把Agent基础设施变成平台级产品——不只是卖模型，而是卖整个开发范式。</div>
+        <span class="news-tag">模型竞赛</span>
+      </div>
+    </div>
+
+    <!-- A级 -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-badge badge-a">A</span>
+        <span class="section-title">格局变化</span>
+      </div>
+      <div class="compact-list">
+        <div class="compact-item">
+          <div class="compact-dot orange"></div>
+          <div class="compact-text"><strong>微软补丁引发Claude Desktop大崩溃</strong>，Anthropic拒绝修复，双方互相推诿，凸显AI应用对操作系统的脆弱依赖</div>
+        </div>
+        <div class="compact-item">
+          <div class="compact-dot orange"></div>
+          <div class="compact-text"><strong>Anthropic即将发布Claude Opus 4.7</strong>及全新AI设计工具，在争议压力下挽回市场信心</div>
+        </div>
+        <div class="compact-item">
+          <div class="compact-dot orange"></div>
+          <div class="compact-text"><strong>苹果Siri团队200名工程师送去AI补习班</strong>，备战WWDC26——连苹果都承认AI能力落后了</div>
+        </div>
+        <div class="compact-item">
+          <div class="compact-dot orange"></div>
+          <div class="compact-text"><strong>MiniMax发布MaxHermes</strong>，定位具备云端自我进化能力的AI助手，走差异化路线</div>
+        </div>
+        <div class="compact-item">
+          <div class="compact-dot orange"></div>
+          <div class="compact-text"><strong>攀峰智能完成数千万天使轮</strong>，前钉钉最年轻副总裁创立，定位电商Agent OS</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- B级 -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-badge badge-b">B</span>
+        <span class="section-title">产品与技术</span>
+      </div>
+      <div class="compact-list">
+        <div class="compact-item">
+          <div class="compact-dot blue"></div>
+          <div class="compact-text"><strong>阿里ATH推出HappyOyster</strong>开放式世界模型，支持实时构建与交互</div>
+        </div>
+        <div class="compact-item">
+          <div class="compact-dot blue"></div>
+          <div class="compact-text"><strong>腾讯混元开源视频生成加速方案</strong>，构建完整多模态开源生态</div>
+        </div>
+        <div class="compact-item">
+          <div class="compact-dot blue"></div>
+          <div class="compact-text"><strong>波士顿动力Spot搭载Gemini</strong>，大模型从云端走向物理世界的标志性案例</div>
+        </div>
+        <div class="compact-item">
+          <div class="compact-dot blue"></div>
+          <div class="compact-text"><strong>NVIDIA发布全球首个开源量子AI模型</strong>，量子机器学习走向开源社区</div>
+        </div>
+        <div class="compact-item">
+          <div class="compact-dot blue"></div>
+          <div class="compact-text"><strong>Gemini桌面端首发</strong>，体验被评"粗糙答卷"，Google在桌面端明显落后</div>
+        </div>
+        <div class="compact-item">
+          <div class="compact-dot blue"></div>
+          <div class="compact-text"><strong>小米18 Pro首曝</strong>，新增专属AI按键，手机厂商把AI从软件变成硬件卖点</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- C级精选 -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-badge badge-c">C</span>
+        <span class="section-title">值得一看</span>
+      </div>
+      <div class="compact-list">
+        <div class="compact-item">
+          <div class="compact-dot"></div>
+          <div class="compact-text"><strong>44%年轻员工暗中搞砸公司AI项目</strong>，AI落地最大阻力可能不是技术，是人心</div>
+        </div>
+        <div class="compact-item">
+          <div class="compact-dot"></div>
+          <div class="compact-text"><strong>微信打击"AI代笔"</strong>，公众号运营者需重新审视AI辅助写作的边界</div>
+        </div>
+        <div class="compact-item">
+          <div class="compact-dot"></div>
+          <div class="compact-text"><strong>红熊AI完成2.1亿元A轮</strong>，红杉中国领投Odyss近2亿，物理AI赛道持续升温</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div>
+      <div class="footer-left">
+        🍅 赛博番茄 · 每日AI早报<br>
+        关注我，每天3分钟掌握AI前沿
+      </div>
+    </div>
+    <div>
+      <div class="footer-right">
+        数据：AIbase · 36氪 · 通往AGI<br>
+        2026-04-17
+      </div>
+      <div class="qr-placeholder">公众号二维码</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

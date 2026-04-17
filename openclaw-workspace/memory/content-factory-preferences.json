@@ -1,0 +1,19 @@
+{
+  "topicPreference": [
+    "AI工具,AI,OpenClaw,Claude,GPT,agent,智能体,AI工具",
+    "副业实操,副业,赚钱,收入,变现,项目,100万",
+    "技术教程,教程,指南,安装,配置,部署,脚本"
+  ],
+  "titlePattern": [
+    "我用...+数据",
+    "X个错误"
+  ],
+  "wordCountRange": [
+    685,
+    4228
+  ],
+  "avgWordCount": 2006,
+  "structurePreference": "痛点→方法",
+  "articleCount": 6,
+  "lastUpdated": "2026-04-04T17:57:00.770Z"
+}

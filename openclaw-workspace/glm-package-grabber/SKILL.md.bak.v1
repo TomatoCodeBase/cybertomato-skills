@@ -1,0 +1,140 @@
+---
+name: glm-package-grabber
+description: 智谱AI（BigModel）套餐代抢工具。自动突破限流排队页面，抢购 GLM 套餐/资源包。触发词：代抢GLM、抢套餐、glm抢购。
+triggers:
+  - 代抢GLM
+  - 抢套餐
+  - glm抢购
+  - bigmodel抢购
+---
+
+# GLM 套餐代抢
+
+## 前置条件
+
+1. 用户已在 Chrome 浏览器登录 bigmodel.cn（有 `bigmodel_token_production` cookie）
+2. CDP Proxy 可用（web-access skill）
+
+## 执行流程
+
+### 1. 环境准备
+
+```bash
+# 检查 CDP
+node "D:/HermesData/.hermes/skills/web/web-access/scripts/check-deps.mjs"
+```
+
+### 2. 获取目标页面 URL
+
+确认用户要抢的套餐页面 URL，常见入口：
+- `/glm-coding` — GLM Coding 套餐
+- `/trialcenter` — 体验中心
+- `/pricing` — 价格/资源包页面
+
+### 3. 开启后台 Tab
+
+```bash
+curl -s "http://localhost:3456/new?url=https://bigmodel.cn/html/rate-limit.html?redirect=%2Fglm-coding"
+# 提取 targetId
+TID=$(echo $response | grep -oP '"targetId":"[^"]*"' | grep -oP '"[^"]*"$' | tr -d '"')
+```
+
+### 4. 限流突破策略（按优先级）
+
+#### 策略 A：浏览器内轮询 + 跳转（推荐）
+
+在限流页内注入持续轮询脚本：
+
+```javascript
+// 保存为 /tmp/bm_race.js
+(async () => {
+  for (let i = 0; i < 100; i++) {
+    try {
+      const res = await fetch('/api/biz/rate-limit/check', {credentials: 'include'});
+      const data = await res.json();
+      if (data && data.code !== 555) {
+        window.location.replace('/glm-coding');  // 替换为实际目标路径
+        return 'PASS at ' + i;
+      }
+    } catch(e) {}
+    await new Promise(r => setTimeout(r, 300));
+  }
+  return 'All attempts failed';
+})()
+```
+
+```bash
+curl -s -X POST "http://localhost:3456/eval?target=$TID" -d @/tmp/bm_race.js
+```
+
+成功率约 50%——API 放行后跳转请求可能再次被限流。
+
+#### 策略 B：外部 curl 轮询 + 浏览器内 fetch 注入
+
+先用 curl 快速轮询 API 确认放行时机，然后在浏览器内用 fetch + document.write 注入 SPA：
+
+```bash
+# 1. 提取 token
+TOKEN=$(curl -s -X POST "http://localhost:3456/eval?target=$TID" \
+  -d 'document.cookie.split(";").filter(c=>c.includes("bigmodel_token_production")).map(c=>c.trim())[0].split("=")[1]' \
+  | tr -d '"' | sed 's/.*"value":"//;s/".*//')
+
+# 2. 外部轮询
+for i in $(seq 1 50); do
+  result=$(curl -s "https://bigmodel.cn/api/biz/rate-limit/check" \
+    -H "Cookie: bigmodel_token_production=$TOKEN" \
+    -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+  echo "$i: $result"
+  if echo "$result" | grep -q '"code":200'; then
+    echo "PASS!"
+    break
+  fi
+  sleep 0.5
+done
+
+# 3. 浏览器内注入 SPA（绕过导航限流）
+curl -s -X POST "http://localhost:3456/eval?target=$TID" -d @/tmp/bm_inject.js
+```
+
+#### 策略 C：反复导航刷新
+
+```bash
+for i in $(seq 1 30); do
+  curl -s "http://localhost:3456/navigate?target=$TID&url=https://bigmodel.cn/glm-coding"
+  sleep 3
+  text=$(curl -s -X POST "http://localhost:3456/eval?target=$TID" -d 'document.body.innerText.substring(0, 200)')
+  if echo "$text" | grep -qv "访问人数较多"; then
+    echo "GOT THROUGH!"
+    break
+  fi
+done
+```
+
+成功率最低，作为兜底。
+
+### 5. 进入套餐页面后
+
+1. 截图确认页面内容
+2. 找到目标套餐的购买/领取按钮
+3. 用 `/click` 或 `/clickAt` 点击按钮
+4. 处理可能的确认弹窗
+5. 截图确认抢购结果
+
+### 6. 收尾
+
+```bash
+curl -s "http://localhost:3456/close?target=$TID"
+```
+
+## 关键经验
+
+- 限流 API：`GET /api/biz/rate-limit/check`，返回 `code:555` 限流，`code:200` 放行
+- 限流窗口极短（秒级），API 放行 ≠ 页面一定能加载成功
+- 浏览器内 `fetch()` 请求不受限流拦截，是绕过限流的关键手段
+- 全站所有路径共享同一限流策略
+- 套餐页面是 Vue SPA，需要 JS 执行才能看到内容
+- 抢购竞争激烈时，自动化刷新速度优于手动刷新，但仍受限于限流窗口
+
+## 站点经验文件
+
+详见 `web-access` skill 的 `references/site-patterns/bigmodel.cn.md`
