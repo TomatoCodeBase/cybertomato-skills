@@ -7,7 +7,8 @@ updated: 2026-04-12
 ## 平台特征
 - 综合科技新闻站，有 AI 频道但非纯 AI 站
 - **JS 动态渲染**，curl + regex 提取不到有效内容
-- **web_fetch / curl 无法提取新闻列表**，必须用 CDP Proxy 的 `/eval` 提取 DOM
+- **web_fetch 可提取新闻列表**（2026-04-19 验证），优先用 web_fetch，CDP 是降级方案
+- CDP `/eval` 因 GBK 编码可能返回乱码，遇到乱码切回 web_fetch
 - AI 新闻混杂在普通科技新闻中，需要关键词过滤
 
 ## 有效模式

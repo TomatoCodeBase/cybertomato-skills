@@ -7,7 +7,8 @@ updated: 2026-04-12
 ## 平台特征
 - 国内AI新闻聚合平台，更新频率极高（每分钟都有新条目）
 - **Next.js SPA**，服务端渲染但内容嵌入 `__NEXT_DATA__` JSON，curl + regex 无法直接提取
-- **web_fetch / curl 无法提取新闻列表**，必须用 CDP Proxy 的 `/eval` 提取 DOM
+- **web_fetch 可提取新闻列表**（2026-04-19 验证），优先用 web_fetch，CDP 是降级方案
+- CDP `/eval` 因 GBK 编码可能返回乱码，遇到乱码切回 web_fetch
 - 单页包含 20-30 条新闻
 
 ## 有效模式

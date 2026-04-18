@@ -37,13 +37,13 @@ node -e "const fs=require('fs'),path=require('path'),p=path.join(require('os').h
 
 **核心原则：国内聚合源信息密度最高，一次fetch拿全量。搜索是补充，不是主力。**
 
-所有数据源均需 **CDP Proxy（web-access skill）抓取**（JS渲染SPA，curl无法提取）。每个源的详细 DOM 提取模式和已知陷阱见 references 目录下的独立文件。
+**优先用 web_fetch，CDP 是降级方案。** 实测 AIbase、站长之家用 web_fetch 即可拿到完整标题列表，CDP 反而因 GBK 编码返回乱码。每个源的详细 DOM 提取模式和已知陷阱见 references 目录。
 
 | 源 | URL | Tier | 抓取方式 | DOM 提取模式 | Reference |
 |---|-----|------|----------|-------------|-----------|
-| AIbase | https://www.aibase.com/zh/news | 1（必须） | CDP | `document.querySelectorAll("a[href*='/news/']")` → textContent + href；⚠️ 标题含 `X小时前.AIbase` 需清洗 | aibase.com.md |
-| 站长之家AI | https://www.chinaz.com/ai/ | 1（必须） | CDP | `document.querySelectorAll("a[href]")` → 按 AI 关键词过滤 | chinaz.com.md |
-| 36氪 | https://36kr.com | 1（必须） | CDP | 同站长，用 `/eval` 提取含 AI 关键词的链接；⚠️ 偶尔触发反爬验证码，重试一次 | 36kr.com.md |
+| AIbase | https://www.aibase.com/zh/news | 1（必须） | **web_fetch 优先**，CDP 降级（⚠️ GBK乱码风险） | `document.querySelectorAll("a[href*='/news/']")` → textContent + href；⚠️ 标题含 `X小时前.AIbase` 需清洗 | aibase.com.md |
+| 站长之家AI | https://www.chinaz.com/ai/ | 1（必须） | **web_fetch 优先**，CDP 降级 | `document.querySelectorAll("a[href]")` → 按 AI 关键词过滤 | chinaz.com.md |
+| 36氪 | https://36kr.com/information/AI/ | 1（必须） | **CDP**（SPA渲染，web_fetch 可能空） | 同站长，用 `/eval` 提取含 AI 关键词的链接；⚠️ 偶尔触发反爬验证码，重试一次 | 36kr.com.md |
 | The Verge AI | https://www.theverge.com/ai-artificial-intelligence | 2.5（补充） | web_fetch（SSR） | ⚠️ 国内被墙，CDP返回 chrome-error，跳过 | theverge.com.md |
 | VentureBeat AI | https://venturebeat.com/category/ai/ | 2.5（补充） | CDP（JS渲染） | - | venturebeat.com.md |
 | Hacker News | https://news.ycombinator.com/ | 2.5（补充） | web_fetch / Firebase API | - | news.ycombinator.com.md |
@@ -52,14 +52,12 @@ node -e "const fs=require('fs'),path=require('path'),p=path.join(require('os').h
 
 ### 采集流程
 
-1. 启动 CDP Proxy：`bash "$HERMES_HOME/skills/openclaw-workspace/web-access/scripts/check-deps.sh"`
-2. 用 `/new` 打开目标页面，用 `/eval` 提取 DOM（提取模式见上表）
-3. 完成后 `/close` 关闭所有自建 tab
-4. Tier 2 搜索：在 CDP 中打开 Google 搜索，用 `/eval` 提取 `h3` 标题和链接
-5. ⚠️ URL 编码用 Node.js（Python3 在 Git Bash 中有中文编码问题）：
-   ```bash
-   node -e "console.log(encodeURIComponent('中文路径').replace(/%2F/g, '/'))"
-   ```
+1. **先尝试 web_fetch 抓 Tier 1 源**（AIbase、站长之家）— 轻量快速，无需启动浏览器
+2. web_fetch 拿不到内容时 → 启动 CDP Proxy（localhost:3456）降级抓取
+3. CDP 乱码问题：国内站用 CDP `/eval` 返回的中文可能是 GBK 编码，PowerShell 无法正确处理。遇到乱码立即切回 web_fetch
+4. 完成后 `/close` 关闭所有自建 tab
+5. Tier 2 搜索：web_search + x_search（缺 Brave API key 时跳过）
+6. URL 编码用 Node.js（Python3 在 Git Bash 中有中文编码问题）
 
 ### 去重规则（Step 3）
 
