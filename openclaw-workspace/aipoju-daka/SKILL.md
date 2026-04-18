@@ -143,6 +143,30 @@ JSON.stringify({
 curl -s "http://localhost:3456/close?target=ID"
 ```
 
+## XHR 拦截验证脚本（提交前执行）
+
+```javascript
+// 提交前先挂载拦截器，用于验证 API 是否真正调用成功
+window._apiCalls = [];
+const origOpen = XMLHttpRequest.prototype.open;
+const origSend = XMLHttpRequest.prototype.send;
+XMLHttpRequest.prototype.open = function(method, url) {
+  this._method = method; this._url = url;
+  return origOpen.apply(this, arguments);
+};
+XMLHttpRequest.prototype.send = function(body) {
+  window._apiCalls.push({method: this._method, url: this._url, body: body ? body.substring(0, 200) : null, time: Date.now()});
+  this.addEventListener('load', function() {
+    window._apiCalls[window._apiCalls.length - 1].status = this.status;
+    window._apiCalls[window._apiCalls.length - 1].response = this.responseText.substring(0, 200);
+  });
+  return origSend.apply(this, arguments);
+};
+"interceptors set";
+```
+
+提交后检查：`JSON.stringify(window._apiCalls)` —— 成功时看到 `clock-in/create` 请求，响应 `code:10010` 表示"今日已打卡"。
+
 ## 注意事项
 
 1. **MINGW64 中文编码**：绝不在 curl -d 中直接写中文，必须通过 .js 文件传递
@@ -157,14 +181,57 @@ URL 中的 UUID 对应不同打卡任务。当前已知的：
 - AI一人公司内容自动化：`08e0a578-1b29-45f0-9455-7a07951675ae/246dae00-6e1e-4ff2-a6f6-0a62be089ddd/AI%E4%B8%80%E4%BA%BA%E5%85%AC%E5%8F%B8%E5%86%85%E5%AE%B9%E8%87%AA%E5%8A%A8%E5%8C%96`
 - 龙虾技能训练营 Agent Skills：`08e0a578-1b29-45f0-9455-7a07951675ae/ef6fb4a0-ad15-45fb-a88c-1a67887b690d/Agent%20Skills`
 
+已知的完整 details 页面 URL：
+- 龙虾获客2期 (OpenClaw自媒体IP获客)：`https://aipoju.com/details/08e0a578-1b29-45f0-9455-7a07951675ae/664f06cd-7004-4b45-99d1-502d46e60e0c`
+- AI一人公司内容自动化：`https://aipoju.com/details/08e0a578-1b29-45f0-9455-7a07951675ae/246dae00-6e1e-4ff2-a6f6-0a62be089ddd`
+- Agent Skills：`https://aipoju.com/details/08e0a578-1b29-45f0-9455-7a07951675ae/ef6fb4a0-ad15-45fb-a88c-1a67887b690d`
+
 如果用户提供了不同的打卡 URL，用该 URL 即可，表单结构相同。
+
+## 行动详情页模式（龙虾获客等）
+
+部分打卡走的是"行动详情页"入口（`aipoju.com/details/{uuid1}/{uuid2}`），页面结构不同：
+
+### 页面导航
+
+1. 页面有4个 tab：**简 介 / 行动路线 / 打 卡 / 日 志**
+2. Tab 按钮文本带空格（"打 卡"），无法用 innerText 精确匹配——**用索引定位**：
+   - `querySelectorAll("button.ant-btn-default")[0]` = 简 介
+   - `[1]` = 行动路线
+   - `[2]` = 打 卡 ← 先点这个切换到打卡视图
+   - `[3]` = 日 志
+3. 切换到"打 卡"tab 后，点"立即打卡"按钮（`button.ant-btn-primary` 的第一个）打开表单
+4. 表单出现后有4个 textarea（无ID），按索引填值（同上"备选填值方式"）
+5. 提交按钮也是"打 卡"文字，是表单内唯一的 button
+
+### 验证方式
+
+**坑（2026-04-18）**：nativeSetter 填值后 clickAt/click 提交，API 调用实际已成功，但 UI 不会刷新——表单仍在、按钮仍是"打 卡"而非"今日已打卡"。直接看 UI 状态会误判为失败。**必须用 XHR 拦截或刷新页面来验证**。
+
+可靠验证方法（优先级从高到低）：
+1. **XHR 拦截**（最准）—— 提交前挂载拦截器，点击后检查 `window._apiCalls`，API 返回 `code:10010, msg:"今日已打卡，请勿重复打卡"` 说明成功
+2. **刷新页面** —— `navigate` 到原 URL 重新加载，然后检查按钮文字是否变为"今日已打卡"、"已行动"天数是否 +1
+3. **切到"日 志"tab** —— 确认内容已显示在日志列表第一条
+
+不靠谱的验证（不要用）：
+- 提交后立即检查 textarea 数量（可能不为零）
+- 提交后立即检查按钮文字（可能没变）
+- 检查 `.ant-message` 提示（"保存成功"可能是海报保存，不是打卡提交）
+
+**多训练营并行打卡**：用 `/new` 为每个训练营创建独立 tab，并行填值 + 提交。每个 tab 操作互不干扰，共享同一个 Chrome 登录态。
+
+### 龙虾获客2期 URL
+
+```
+https://aipoju.com/details/08e0a578-1b29-45f0-9455-7a07951675ae/664f06cd-7004-4b45-99d1-502d46e60e0c
+```
 
 ## 不同打卡任务的日志路径
 
 | 任务 | 日志路径 | 文件名格式 |
 |------|---------|-----------|
 | AI一人公司 | `D:\cybertomato\00-个人日记\Z知识学习\Y一人公司丨4月\` | `YYYY-MM-DD--一人公司4月打卡.md` |
-| 龙虾技能 | `D:\cybertomato\00-个人日记\Z知识学习\龙虾技能丨4月\` | `YYYY-MM-DD--龙虾技能4月打卡.md` |
+| 龙虾获客2期 | `D:\cybertomato\00-个人日记\Z知识学习\L龙虾获客2丨2期\` | `YYYY-MM-DD--龙虾获客2期打卡.md` |
 
 ## 备选填值方式（无ID时用索引）
 
