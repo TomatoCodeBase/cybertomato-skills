@@ -190,8 +190,9 @@ version: 2.0.0
 
 **切换确认弹窗：**
 - 点击 .toggle-mode 后会弹出确认框，不会立即切换
-- 确认按钮选择器：`div.confirm`（innerText === '确定'），用 clickAt 点击即可
-- 弹窗出现时机：点击切换按钮后约 1 秒内，需 sleep 后再查找
+- 确认按钮选择器：`.dialog-container .confirm`（innerText === '确定'），用 clickAt 点击
+- 弹窗出现时机：点击切换按钮后约 1-2 秒，需 sleep 后再查找
+- 如果 `div.confirm` 不生效，试试更精确的 `.dialog-container .confirm`
 
 ### 进入编辑页的方式
 
@@ -303,7 +304,7 @@ POST https://api.zsxq.com/v2/groups/{groupId}//topics，带上签名头。
 10. **编辑页加载时序**：标题 input 先出现，ProseMirror 编辑器后出现（差2-3秒）
 11. **浏览器可能是 headless**：screenX/Y/outerW/H=0 时 OS 级鼠标模拟不可行
 12. **Quill 编辑器注入**：直接设置 innerHTML 不会同步 Quill delta 模型。用剪贴板粘贴方式（DataTransfer + ClipboardEvent）
-13. **Quill 切换 Markdown 的按钮行为反直觉（2026-04-18 发现）**：toggle-mode.richText 按钮用 clickAt（CDP Input.dispatchMouseEvent）点击会返回成功但 Angular 不响应（无弹窗、不切换）；必须用 `/click` 端点（JS .click()）才能触发。但确认弹窗的"确定"按钮反而用 clickAt 更可靠。流程：/click 切换按钮 → sleep 2-3s → clickAt div.confirm
+13. **Quill 切换 Markdown 流程（2026-04-19 更新）**：toggle-mode.richText 按钮的触发方式不稳定，/click 和 clickAt 行为可能随 Angular 版本变化。2026-04-19 实测可靠流程：clickAt `.toggle-mode.richText` → sleep 2s → 弹出 dialog-container → clickAt `.dialog-container .confirm`（注意：用 `.dialog-container .confirm` 而非 `div.confirm`，前者更精确可靠）。如果 clickAt 切换按钮未触发弹窗，尝试 `/click`（JS .click()）。切换后验证：`.ql-editor` 消失、`.ProseMirror` 出现。
 
 ## 星球导航
 
@@ -337,3 +338,4 @@ POST https://api.zsxq.com/v2/groups/{groupId}//topics，带上签名头。
 | 2026-04-16 | Snap砍千人喂AI，MiniMax养马进化：Agent战争打到"偷代码"了 | 88882824154122（陪伴营） | 同上，两个星球均手动发布成功 |
 | 2026-04-17 | Claude强实名引爆全网，OpenAI暗放GPT-5.4：AI行业安全与竞赛同时失控 | 28885124282121（日记） | 完整自动化成功：nativeSetter标题+ProseMirror innerHTML注入+clickAt发布 |
 | 2026-04-17 | Claude强实名引爆全网，OpenAI暗放GPT-5.4：AI行业安全与竞赛同时失控 | 88882824154122（陪伴营） | 完整自动化成功：clickAt切Markdown→clickAt确认→nativeSetter标题+ProseMirror注入+clickAt发布 |
+| 2026-04-19 | Claude Design 硬刚 Figma 的背后，是 Anthropic 300 亿美元的底气 | 88882824154122（陪伴营） | 完整自动化成功：clickAt切Markdown→clickAt `.dialog-container .confirm`→nativeSetter标题+ProseMirror注入+clickAt发布 |

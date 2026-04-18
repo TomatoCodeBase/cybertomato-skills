@@ -137,7 +137,7 @@ node -e "const fs=require('fs'),path=require('path'),p=path.join(require('os').h
 
 ## 写入 Obsidian
 
-路径：`03-内容工厂/日报/YYYY-MM-DD-AI热点日报.md`
+路径：`03-内容工厂/日报/AI热点日报/YYYY-MM-DD-AI热点日报.md`
 
 需要 `OBSIDIAN_API_KEY` 环境变量（已在 .env 中配置）。
 
@@ -146,7 +146,7 @@ node -e "const fs=require('fs'),path=require('path'),p=path.join(require('os').h
 ```bash
 # URL 编码中文路径（必须用 Node.js，Python3 在 Git Bash 中会输出空字符串）
 ENCODED_PATH=$(node -e "
-const p = '03-内容工厂/日报/YYYY-MM-DD-AI热点日报.md';
+const p = '03-内容工厂/日报/AI热点日报/YYYY-MM-DD-AI热点日报.md';
 console.log(encodeURIComponent(p).replace(/%2F/g, '/'));
 ")
 
@@ -167,7 +167,7 @@ curl -s "http://localhost:27123/vault/$ENCODED_PATH" \
 
 ```powershell
 # vault 参数是 vault 名，file 参数相对于 vault 根目录
-start "obsidian://open?vault=VAULT_NAME&file=03-内容工厂/日报/YYYY-MM-DD-AI热点日报.md"
+start "obsidian://open?vault=VAULT_NAME&file=03-内容工厂/日报/AI热点日报/YYYY-MM-DD-AI热点日报.md"
 ```
 
 ⚠️ 将 `VAULT_NAME` 替换为实际的 Obsidian vault 名称。
@@ -184,7 +184,7 @@ start "obsidian://open?vault=VAULT_NAME&file=03-内容工厂/日报/YYYY-MM-DD-A
 
 | 来源 | 位置 | 格式 |
 |------|------|------|
-|| 自动日报 | `03-内容工厂/日报/YYYY-MM-DD-AI热点日报.md`（通过 Obsidian API 读取） | Markdown（上一流程的输出） ||
+|| 自动日报 | `03-内容工厂/日报/AI热点日报/YYYY-MM-DD-AI热点日报.md`（通过 Obsidian API 读取） | Markdown（上一流程的输出） ||
 || 手工补充 | `D:\\cybertomato\\03-内容工厂\\日报\\补充信息\\` 目录下的文件 | Markdown ||
 
 **补充信息目录规则（2026-04-17 新增）：**
@@ -208,7 +208,7 @@ start "obsidian://open?vault=VAULT_NAME&file=03-内容工厂/日报/YYYY-MM-DD-A
 
 ### 融合流程
 
-1. 在 `03-内容工厂/日报/` 目录下直接写入融合版文件 `YYYY-MM-DD-番茄AI热点日报.md`（与自动采集版平铺，不建子文件夹）
+1. 在 `03-内容工厂/日报/Ai融合日报/` 目录下写入融合版文件 `YYYY-MM-DD-番茄AI热点日报.md`
 2. 读取自动日报和手工补充信息
 3. 按以下规则合并后写入融合版
 
