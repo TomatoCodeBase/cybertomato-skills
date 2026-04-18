@@ -70,6 +70,19 @@ commit message 要体现改了什么，不要写"update"这种模糊描述。
 2. 给出修改建议
 3. 等待修改后重新审核
 
+## 前置条件（推送前必须满足）
+
+1. **git 用户信息已配置**：
+   ```bash
+   git config --global user.email "tomatomind@163.com"
+   git config --global user.name "TomatoCodeBase"
+   ```
+   推送前先检查：`git config user.email`，如果为空则先配置。
+
+2. **git 已认证**：`gh auth status` 或 `git remote -v` 能正常工作。
+
+如果任一条件不满足，先修复再推送。
+
 ## 推送时可能遇到的问题
 
 ### 分支保护拒绝 push
@@ -107,9 +120,15 @@ Fine-grained token 默认不能创建仓库，需在 token 设置里把 Administ
 
 其他 agent 贡献技能时，给它们的规则核心：
 
-1. 清理原 skill 文件 — 去掉本地路径、个人信息，只保留纯操作逻辑
-2. 放到待审区 `D:\HermesData\.hermes\skills-incoming\{skill-name}\`
-3. 必须有 SKILL.md（name + description + 触发条件 + 步骤 + 注意事项）
-4. 不包含 API 密钥、密码
-5. 完成后告诉用户，Hermes 会审核
-6. 不要直接放到 `skills\` 目录，那是正式区
+1. **git 前置配置** — 先检查 `git config user.email`，如果为空则要求用户配置：
+   ```bash
+   git config --global user.email "用户邮箱"
+   git config --global user.name "用户名"
+   ```
+   没有 git 用户信息，commit 和 push 都会失败。
+2. 清理原 skill 文件 — 去掉本地路径、个人信息，只保留纯操作逻辑
+3. 放到待审区 `D:\HermesData\.hermes\skills-incoming\{skill-name}\`
+4. 必须有 SKILL.md（name + description + 触发条件 + 步骤 + 注意事项）
+5. 不包含 API 密钥、密码
+6. 完成后告诉用户，Hermes 会审核
+7. 不要直接放到 `skills\` 目录，那是正式区

@@ -44,11 +44,13 @@ curl -s -X POST "http://localhost:3456/click?target={targetId}" -d '.menu-contai
 
 #### 4a. API提取（推荐首选）⚡
 
-⚠️ **认证方式选择**（两种都可能有效，取决于CDP环境）：
-- **首选：同步 XHR**（`XMLHttpRequest` + `x.withCredentials=true`）— 在CDP `eval` 中稳定工作，能携带httpOnly cookie
-- **备选：fetch + credentials:'include'** — 某些CDP环境下fetch无法携带httpOnly cookie，返回code 1059
+⚠️ **认证方式选择**（两种都可能有效，取决于CDP环境，必须先测试）：
+- **方式A：fetch + credentials:'include' + Origin/Referer头** — 2026-04-19实测成功（sync XHR反而1059）。需带 `Origin: https://wx.zsxq.com` 和 `Referer: https://wx.zsxq.com/` 头
+- **方式B：同步 XHR**（`XMLHttpRequest` + `x.withCredentials=true`）— 历史上稳定，但2026-04-19实测返回1059
 
-如果fetch返回code 1059，立即切换到sync XHR：
+**关键**：两种都试，哪种能用用哪种。如果都返回1059，说明cookie过期，需要用户重新登录wx.zsxq.com。
+
+⚠️ **fetch 会话快速过期**（2026-04-19）：fetch API 认证在页面加载后有效但短时间内会过期（第二次独立 eval 调用可能返回空数组）。**必须用 Promise.all 一次性发所有请求**，缓存结果到 `window.__zsxq_raw`，再逐批提取。不要分多次 eval 调用 fetch。
 
 ```javascript
 // 同步XHR方式（推荐）
@@ -90,7 +92,27 @@ fetch方式（备选，可能失效）：
 
 注意：`count=20`（不带scope参数）即可获取最新帖子。不需要 `scope=all`。
 
-旧fetch方式（无Origin头，可能返回code 1059）：
+⚠️ **fetch 认证单次有效**：fetch 成功一次后，cookie/token 状态可能变化，第二次 fetch 返回 1059。**必须用 Promise.all 批量并发所有请求，一次性缓存到 window 变量**：
+
+```javascript
+// 批量并发模板（3个请求同时发出）
+(async function(){
+  var urls = [
+    'https://api.zsxq.com/v2/groups/GID/topics?count=30',
+    'https://api.zsxq.com/v2/hashtags/51111181821124/topics?count=20',
+    'https://api.zsxq.com/v2/hashtags/28824885148121/topics?count=20'
+  ];
+  var results = await Promise.all(urls.map(function(url){
+    return fetch(url, {credentials:'include', headers:{'Origin':'https://wx.zsxq.com','Referer':'https://wx.zsxq.com/'}}).then(function(r){return r.json()});
+  }));
+  window.__zsxq_raw = results.map(function(r){return r.resp_data || r});
+  return JSON.stringify(results.map(function(r,i){return {url:urls[i], ok:r.succeeded, count:(r.resp_data&&r.resp_data.topics)?r.resp_data.topics.length:0}}));
+})()
+```
+
+之后用 `window.__zsxq_raw[0]`/`[1]`/`[2]` 分步读取数据。
+
+旧fetch方式（单请求，不推荐用于多端点场景）：
 
 ```javascript
 (function(){return new Promise(function(resolve){
@@ -287,6 +309,8 @@ function extractTitle(tp){
 - `type=solution` 或 `type=q&a` 且 text<50字 → 纯提问
 - 任何 text<30字 → 水帖/打卡
 - `type=task` → 无标题，丢弃
+- **标题关键词过滤**（2026-04-19 新增）：标题含"打卡"、"签到"、"报到" → 打卡水帖，丢弃。注意用标题而非text判断，因为text可能有150+字但仍是水帖
+- **同作者同标题去重**：同一作者在同一天内发多条标题相同的帖子时，保留text最长的那条，短的删除（实测44分钟内同作者同标题发两帖，短帖151字是长帖1833字的子集）
 
 ### Step 5: 写入飞书多维表格
 
@@ -334,6 +358,8 @@ curl.exe -s "http://localhost:3456/close?target={targetId}"
 18. **Shell批量写入避免printf**：标题含emoji/引号/特殊字符时printf会破坏JSON。改用写独立JSON文件+`$(cat file)`读取，或用field ID避免中文key
 19. **detail API 对部分帖子失败**：`/v2/topics/{id}` 可能返回 internal error（帖子被删除/限制访问），需 fallback 到 list API 已获取的数据，不要因单条失败阻塞整体流程
 20. **lark-cli `--json @file.json` 只接受相对路径**：绝对路径如 `@/tmp/xxx.json` 会报错 `--file must be a relative path within the current directory`，必须用相对路径如 `@./fix.json`
+21. **fetch 认证一次性有效**：fetch+credentials 成功获取一次API后，第二次调用可能返回1059（cookie状态变化）。多端点采集必须用 Promise.all 并发，结果缓存到 window 变量分步读取。切勿顺序发起多个fetch
+22. **板块API可能返回1059**：`/v2/hashtags/{id}/topics` 端点有时返回code 1059（即使主 topics API 成功），可能是权限/签名问题。遇到时跳过该板块，用已有数据继续
 
 ## API 交互能力（基于官方 zsxq-cli 端点）
 
@@ -483,7 +509,7 @@ FIELD_IDS=标题:fld4b6ZPGe,发布时间:fld4veA6HK,作者:fldEAGej0T,链接:fld
 LARK_CLI=node /d/OpenClaw/node_modules/@larksuite/cli/scripts/run.js
 ```
 
-⚠️ **lark-cli 调用方式**：shell wrapper `/d/OpenClaw/lark-cli` 在 MINGW64 下会 hang/timeout（2026-04-17 验证）。改用 `node /d/OpenClaw/node_modules/@larksuite/cli/scripts/run.js` 直接调用底层脚本即可。若 run.js 不存在，先 `cd /d/OpenClaw && npm install @larksuite/cli` 重装。
+⚠️ **lark-cli 调用方式**：2026-04-19验证 `lark-cli.exe` 是原生二进制（非node脚本），直接执行即可：`/d/OpenClaw/node_modules/@larksuite/cli/bin/lark-cli.exe`。如果该二进制不存在，先 `cd /d/OpenClaw && npm install @larksuite/cli` 重装。shell wrapper `/d/OpenClaw/lark-cli` 在 MINGW64 下可能 hang/timeout，优先用 `.exe` 直接调用。若 exe 也不存在，降级用 `node /d/OpenClaw/node_modules/@larksuite/cli/scripts/run.js`。
 
 ## 链接构建
 
@@ -494,7 +520,7 @@ LARK_CLI=node /d/OpenClaw/node_modules/@larksuite/cli/scripts/run.js
 ### 方法A: batch-create（推荐，一次性写入多条）⚡
 
 ```bash
-LARK="/d/OpenClaw/lark-cli"
+LARK="/d/OpenClaw/node_modules/@larksuite/cli/bin/lark-cli.exe"
 BT="BASE_TOKEN" TI="TABLE_ID"
 
 # Python生成batch JSON到文件
@@ -523,7 +549,7 @@ $LARK base +record-batch-create --base-token $BT --table-id $TI --json "$BATCH_J
 ### 方法B: 单条upsert循环
 
 ```bash
-LARK="/d/OpenClaw/lark-cli"
+LARK="/d/OpenClaw/node_modules/@larksuite/cli/bin/lark-cli.exe"
 BT="BASE_TOKEN" TI="TABLE_ID"
 for line in \
   '{"fld4b6ZPGe":"标题","fld4veA6HK":"2026-04-10 20:25:32","fldEAGej0T":"作者","fldHK0PzkW":"https://wx.zsxq.com/group/GID/topic/UID","flduei9oKf":"AI编程"}' \
@@ -725,5 +751,6 @@ Cron prompt要点：读脚本常量 → +record-list去重 → CDP爬取 → 低
 - **Python `/tmp` ≠ MSYS2 `/tmp`**：Python 的 `tempfile.gettempdir()` 返回 `D:\tmp`（基于Python安装路径），而 MSYS2 bash 的 `/tmp` 是另一个目录。跨边界传文件时统一用绝对路径 `D:\tmp`（Python中）或 `/d/tmp/`（bash中）
 - **`ensure_ascii=True`**：Python写JSON给bash/lark-cli消费时必须用 `json.dumps(data, ensure_ascii=True)`，否则中文在Windows MSYS2边界可能乱码
 - **lark-cli 输出含无效Unicode代理对**：`+record-list` 的JSON输出可能含孤立代理对（surrogate pairs），导致 Python `json.loads()` 解析失败。验证写入结果改用 **记录总数对比**（写入前后 `| .data.data | length` 的差值），而非查询特定日期记录
+- **删除记录需 offset 翻页**：`+record-list` 每页200条，目标记录可能在第2页（offset=200）。删除时先按页遍历找到 record_id，再 `+record-delete --record-id REC_ID`。grep 搜索时 jq 对中文不可靠，用 `grep -o '"topic_uid_value"'` 配合行号定位
 - **批量写入模板**：优先用 `+record-batch-create`（一次API调用写入多条，字段名格式 `{"fields":["标题",...], "rows":[[...]]}`），比循环 `+record-upsert` 快10倍且不易出错。每条记录写独立JSON文件到 `/d/tmp/`（`ensure_ascii=True`），bash循环 `for i in $(seq 0 $n); do $LARK base +record-upsert ... --json "$(cat /d/tmp/r_$i.json)"; done`
 - **lark-cli 没有 +record-create 命令**：创建单条用 `+record-upsert`（不传 --record-id），批量用 `+record-batch-create`
