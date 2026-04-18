@@ -303,8 +303,10 @@ POST https://api.zsxq.com/v2/groups/{groupId}//topics，带上签名头。
 9. **切换 Markdown 弹窗确认**：点击 .toggle-mode 后弹出确认框，必须点"确定"才生效
 10. **编辑页加载时序**：标题 input 先出现，ProseMirror 编辑器后出现（差2-3秒）
 11. **浏览器可能是 headless**：screenX/Y/outerW/H=0 时 OS 级鼠标模拟不可行
-12. **Quill 编辑器注入**：直接设置 innerHTML 不会同步 Quill delta 模型。用剪贴板粘贴方式（DataTransfer + ClipboardEvent）
-13. **Quill 切换 Markdown 流程（2026-04-19 更新）**：toggle-mode.richText 按钮的触发方式不稳定，/click 和 clickAt 行为可能随 Angular 版本变化。2026-04-19 实测可靠流程：clickAt `.toggle-mode.richText` → sleep 2s → 弹出 dialog-container → clickAt `.dialog-container .confirm`（注意：用 `.dialog-container .confirm` 而非 `div.confirm`，前者更精确可靠）。如果 clickAt 切换按钮未触发弹窗，尝试 `/click`（JS .click()）。切换后验证：`.ql-editor` 消失、`.ProseMirror` 出现。
+12. **Quill 编辑器注入**：直接设置 innerHTML 不会同步 Quill delta 模型。用剪贴板粘贴方式（DataTransfer + ClipboardEvent）。**paste 前必须 `ql.focus()`**，否则 paste 事件不会被编辑器接收
+13. **Quill 切换 Markdown 流程（2026-04-19 更新）**：toggle-mode.richText 按钮的触发方式不稳定，/click 和 clickAt 行为可能随 Angular 版本变化。2026-04-19 实测可靠流程：clickAt `.toggle-mode.richText` → sleep 2s → 弹出 dialog-container → clickAt `.dialog-container .confirm`（注意：用 `.dialog-container .confirm` 而非 `div.confirm`，前者更精确可靠）。如果 clickAt 切换按钮未触发弹窗，尝试 `/click`（JS .click()）。切换后验证：`.ql-editor` 消失、`.ProseMirror` 出现
+14. **避免 toggle 的备选方案：直接在 Quill 中 paste（2026-04-19）**：当 toggle 切换不稳定时，可以不切 Markdown，直接在 Quill 编辑器中 paste HTML 注入。流程：`document.querySelector('.ql-editor').focus()` → 构造 ClipboardEvent paste → 注入。注意：此方案 paste 成功但 Angular 状态同步可能有延迟，发布按钮可能仍为 disabled，需验证后再发布
+15. **CDP /eval Content-Type**：`-d` 默认发 application/x-www-form-urlencoded，对纯 JS 代码通常没问题；但如果 JS 内容含 `=` 或 `&` 字符会被解析，此时用 `--data-binary` + `-H "Content-Type: text/plain"` 更安全
 
 ## 星球导航
 
