@@ -1,0 +1,237 @@
+---
+name: ai-daily-report
+description: AI热点日报生成器。每天自动采集全球AI热点，整理为中文日报写入Obsidian。支持手动触发和cron定时执行。
+when_to_use: |
+  Use when user mentions: AI日报、AI热点、热点日报、ai daily、采集日报、补采日报。
+  Also use when user wants to generate a curated AI news digest, or review today's AI news.
+argument-hint: "[YYYY-MM-DD]（可选，默认今天）"
+---
+
+# AI热点日报生成器
+
+## 配置
+
+读取配置文件获取数据源和采集策略：
+```
+node -e "console.log(JSON.stringify(JSON.parse(require('fs').readFileSync(require('path').expandTilde('~/.hermes/config/ai-daily-report.json'),'utf-8')),null,2))"
+```
+
+⚠️ 配置文件路径：`D:/OpenClaw/workspace/config/ai-daily-report.json`（硬编码绝对路径，因为Hermes与OpenClaw共享Windows文件系统）。
+
+## 采集策略：Tier 1 聚合源优先
+
+**核心原则：国内聚合源信息密度最高，一次fetch拿全量。搜索是补充，不是主力。**
+
+### Tier 1：国内聚合源（主力，必须执行）
+
+**必须用 CDP Proxy 抓取**（三个源均为 JS 渲染 SPA，curl/web_fetch 无法提取内容）：
+
+| 源 | URL | 特点 |
+|---|-----|------|
+| AIbase | https://www.aibase.com/zh/news | 条目密度最高，更新最快 |
+| 站长之家AI | https://www.chinaz.com/ai/ | 与AIbase互补，偏产业应用 |
+| 36氪 | https://36kr.com | 科技+商业视角，覆盖融资 |
+
+从 Tier 1 提取80%以上的日报内容。
+
+### Tier 2：搜索补充（尽量做，失败不影响主体）
+
+1. web_search 搜索海外重大事件，取前3条
+2. x_search 搜索行业大佬动态（配置中的 x_accounts），各1条
+
+### Tier 2.5：海外原创新闻（补充，优先级低于搜索）
+
+| 源 | URL | 特点 | 抓取方式 |
+|---|-----|------|----------|
+| The Verge AI | https://www.theverge.com/ai-artificial-intelligence | 独家深度，偏消费者视角 | web_fetch（SSR）⚠️ 国内被墙，CDP无法访问 |
+| VentureBeat AI | https://venturebeat.com/category/ai/ | 产业报道，偏企业视角 | CDP（JS渲染） |
+| Hacker News | https://news.ycombinator.com/ | 技术社区热点，需翻墙 | web_fetch / Firebase API |
+
+这三个源为英文，适合补充海外视角和 "📌 值得关注" 板块。
+
+### Tier 3：降级（搜索失败时）
+
+- web_search 失败 → web_fetch 直接抓 Tier 2.5 的网站
+- x_search 失败 → 跳过（X动态是锦上添花）
+- **不要因为搜索失败就重试多次**，Tier 1 已经足够出高质量日报
+
+## 日报格式
+
+```markdown
+# [金句标题：两个冲突/对比事件并列，有画面感]
+
+> 日期：YYYY-MM-DD 周X
+
+## 🔥 今日重点
+（3-5条最重要的新闻，每条：**标题**+一句话摘要+来源链接）
+
+## 🛠️ 产品与技术
+（3-5条产品发布、新功能、开源模型等）
+
+## 💬 业界观点
+（2-3条大佬观点或深度讨论）
+
+## 🇨🇳 国内动态
+（2-3条国内AI相关动态）
+
+## 📌 值得关注
+（1-2条深度文章或教程推荐）
+
+---
+
+*数据来源：[列出实际使用的源]*
+*采集时间：YYYY-MM-DD HH:mm CST*
+```
+
+### 标题写作原则
+
+- **主标题**：两个冲突/对比事件的并列句，有画面感
+  - ✅ "大模型变成打工人：GLM-5.1连续工作8小时，GPT-4o之母出走OpenAI"
+  - ✅ "开源大模型集体大逃杀：MiniMax 2.7免费，Anthropic 却涨到 3500 亿"
+  - ❌ "AI热点日报 2026-04-09"
+  - ❌ "今日AI新闻汇总"
+- **每条新闻标题**：有信息量，不只是公司名
+  - ✅ "哈啰MCP服务上线：AI直接替你叫车"
+  - ❌ "哈啰发布新功能"
+
+## 实战经验（2026-04-14 采集）
+
+1. **飞书多维表格不可通过 CDP eval 提取**：飞书多维表格（Base）是 canvas 渲染或 shadow DOM，`document.querySelectorAll("table tr")`、`document.querySelectorAll("a[href]")` 均返回空。body.innerText 也只有导航元素，没有表格数据。如果需要飞书数据源列表，应该用飞书 API（lark-base skill）或直接截图+OCR。
+2. **vision_analyze 对本地文件路径在 Windows/MINGW64 环境不稳定**：多次尝试 `/c/tmp/xxx.png`、`~/xxx.png`、`C:/Users/xxx.png` 均失败（invalid source / connection error / timeout）。如果需要视觉分析截图，优先考虑其他方式。
+3. **The Verge 在国内被墙**：CDP 打开 theverge.com 返回 `chrome-error://chromewebdata`，无法访问。VentureBeat 可正常访问。Hacker News 取决于网络环境。
+4. **Tier 1 足够出高质量日报**：AIbase + 站长之家 + 36氪三个源提供了 80%+ 的日报内容。海外源和搜索是锦上添花，不是必需品。
+5. **AIbase 选择器 `a[href*='/news/']` 完美工作**，但需清洗 textContent 中的时间戳和 `.AIbase` 后缀。
+6. **36氪 AI 频道 `https://36kr.com/information/AI/` 可直接用关键词过滤**，效果很好。
+7. **Obsidian 写入验证**：`curl -s "http://localhost:27123/vault/$ENCODED_PATH" -H "Authorization: Bearer $OBSIDIAN_API_KEY" | head -c 200`，正常应返回 `# ` 开头的 markdown 内容。
+
+## 数据源参考文档
+
+每个数据源的抓取方式、DOM 提取模式、已知陷阱都有独立的 reference 文件。
+
+**存放位置**：`D:\cybertomato\03-内容工厂\AI热点日报\数据源\`（Obsidian vault 内，方便查看和编辑）
+
+| 文件 | 对应数据源 |
+|------|-----------|
+| aibase.com.md | AIbase（Tier1） |
+| chinaz.com.md | 站长之家AI（Tier1） |
+| 36kr.com.md | 36氪（Tier1） |
+| theverge.com.md | The Verge AI（Tier2.5） |
+| venturebeat.com.md | VentureBeat AI（Tier2.5） |
+| news.ycombinator.com.md | Hacker News（Tier2.5） |
+
+⚠️ **新增数据源时，reference 文件必须写到 Obsidian vault 的 `数据源/` 目录**，不要写到 Hermes skills 的 references 目录。Hermes skills 目录里的副本仅供技能加载时参考。
+
+## 数据抓取方式
+
+**AIbase 和站长之家是 JS 渲染 SPA（Next.js），curl + regex 提取会失败。必须用 CDP Proxy（web-access skill）抓取。**
+
+1. 启动 CDP Proxy：`bash "D:/OpenClaw/workspace/skills/web-access/scripts/check-deps.sh"`
+2. 用 `/new` 打开目标页面，用 `/eval` 提取 DOM 中的新闻列表
+3. AIbase 提取模式：`document.querySelectorAll("a[href*='/news/']")`，取 textContent 和 href
+4. 站长之家提取模式：`document.querySelectorAll("a[href]")`，按 AI 关键词过滤
+5. 36氪同理，用 `/eval` 提取含 AI 关键词的链接
+6. Tier 2 搜索：在 CDP 中打开 Google 搜索，用 `/eval` 提取 `h3` 标题和链接
+7. 完成后 `/close` 关闭所有自建 tab
+
+⚠️ **Python3 在 Git Bash 中有中文编码问题**（urllib 输出空字符串），URL 编码用 Node.js：
+```bash
+node -e "console.log(encodeURIComponent('中文路径').replace(/%2F/g, '/'))"
+```
+
+## 写入 Obsidian
+
+路径：`03-内容工厂/AI热点日报/YYYY-MM-DD-AI热点日报.md`
+
+⚠️ **注意**：Obsidian REST API 的 `/vault/` 路径已经是 vault 根目录（`D:\cybertomato`），不要在路径前再加 `cybertomato/`，否则会多套一层目录变成 `D:\cybertomato\cybertomato\...`。
+
+需要 `OBSIDIAN_API_KEY` 环境变量（已在 .env 中配置）。
+
+```bash
+# URL 编码中文路径（必须用 Node.js，Python3 在 Git Bash 中会输出空字符串）
+ENCODED_PATH=$(node -e "
+const p = '03-内容工厂/AI热点日报/YYYY-MM-DD-AI热点日报.md';
+console.log(encodeURIComponent(p).replace(/%2F/g, '/'));
+")
+
+# 写入文件（--data-binary 保留换行和中文）
+curl -s -X PUT "http://localhost:27123/vault/$ENCODED_PATH" \
+  -H "Authorization: Bearer $OBSIDIAN_API_KEY" \
+  -H "Content-Type: text/markdown; charset=utf-8" \
+  --data-binary @/path/to/daily-report.md
+```
+
+⚠️ **关键约束**：
+- Body 必须是纯 Markdown 文本
+- 不要用 JSON.stringify，不要把内容包在引号里
+- 中文路径必须 URL 编码后才能传给 Obsidian REST API
+- PowerShell 的 `/tmp/` 路径在 Windows 上不映射，优先用 curl + Git Bash
+- 写入后验证内容正确性：
+```bash
+curl -s "http://localhost:27123/vault/$ENCODED_PATH" \
+  -H "Authorization: Bearer $OBSIDIAN_API_KEY" | head -c 100
+# 应以 "# " 开头，而非 "{" 开头
+```
+
+## 打开 Obsidian
+
+```powershell
+start "obsidian://open?vault=cybertomato&file=03-内容工厂/AI热点日报/YYYY-MM-DD-AI热点日报.md"
+# 注意：obsidian:// URI 的 vault 参数是 vault 名（cybertomato），但 file 参数相对于 vault 根目录（不含 cybertomato 前缀）
+```
+
+## 融合补充：与手工采集信息合并
+
+用户常在自动日报之外，手工收集补充信息（观猹每日上新、通往AGI知识库更新、语鲸日报等），需要将两份来源融合为一份完整日报。
+
+### 融合流程
+
+1. 在 `03-内容工厂/AI热点日报/` 目录下直接写入融合版文件 `YYYY-MM-DD-番茄AI热点日报.md`（与自动采集版平铺，不建子文件夹）
+2. 读取自动日报和手工补充信息
+3. 按以下规则合并后写入融合版
+
+### 融合规则
+
+**重复合并**：
+- 同一事件出现在两份来源中 → 合并为一条，取信息量更大的描述，补充另一份的独有细节
+- 同一公司/主题的不同维度事件（如"豆包手机封杀"+"Seeduplex语音上线"）→ 合并为专题，用子项列出
+
+**分级体系**（A+B混合：先分级再按主题分组）：
+
+| 级别 | emoji标题 | 含义 | 正文深度要求 |
+|------|-----------|------|-------------|
+| S级 | 🔥 今日重点 | 影响全局的标志性事件 | 每条3-5句，必须说清"为什么重要" |
+| A级 | ⚡ 格局变化 | 行业格局性变化 | 每条2-3句完整描述 |
+| B级 | 🛠️ 产品与技术 | 新发布与更新 | 每条2句，产品必须有功能描述 |
+| C级 | 📌 动态与观点 | 行业背景信息 | 每条1-2句 |
+
+**分级后在每个级别内按主题域分组**（安全与监管、模型竞赛、硬件与端侧、创作者生态、工具与开发等）。
+
+### 融合版质量红线（踩到即不合格）
+
+1. **主标题必须是金句风格** — 两个冲突/对比事件并列，有画面感。绝不能用"YYYY-MM-DD AI热点日报（融合版）"这种文件名当标题
+2. **每条新闻信息量必须达标** — 绝不能只有半句话。如果补充信息原文太简略，基于标题和常识补足2-3句合理描述
+3. **产品上新必须有功能描述** — 不能只有名字+链接，读者不知道这是干嘛的
+4. **知识库/资源推荐必须有一句话价值点** — 告诉读者"看这条能学到什么"
+5. **S级新闻必须有分析纵深** — 不能一句话带过，要展开"为什么重要""影响什么"
+6. **不要在日报正文里放融合说明表** — 元信息（处理了哪些重复项、新增了什么）不属于日报内容
+
+## 质量标准
+
+- 严格用事实，不编造新闻
+- 每条必须附来源链接
+- 总条目目标：15-25条（不是越多越好，但要有足够覆盖面）
+- 如果当天新闻少，每个板块可以缩减到2条，不要凑数
+- 如果使用了 CDP，完成后关闭所有自己创建的 tab
+- 每条新闻正文至少40-80字，信息量让人看懂"为什么这条新闻重要"
+- 产品类条目必须有功能定位描述，不能只写名字
+
+## 故障处理
+
+| 问题 | 处理 |
+|------|------|
+| web_fetch 源站超时 | 跳过该源，用其他源补充 |
+| web_search 全部失败 | 正常，靠 Tier 1 就够 |
+| Obsidian 写入 401 | 缺少 Authorization 头，需 `Bearer $OBSIDIAN_API_KEY` |
+| Obsidian 写入 500 + 编码错误 | 中文路径未 URL 编码，用 Node.js encodeURIComponent |
+| Obsidian 写入失败 | 检查 API 是否运行（localhost:27123） |
+| 写入后内容是 JSON | 说明 Body 被错误包装了，重新写入 |

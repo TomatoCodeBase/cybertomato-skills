@@ -1,0 +1,5 @@
+timestamp	backup	skill	old_score	new_score	status	dimension	note	eval_mode
+2026-04-15T10:00	baseline	web-access	-	74.1	baseline	-	8维度基线评估，主要短板：检查点设计不够显式、反爬策略缺失	dry_run
+2026-04-15T10:00	baseline	topiclab	-	55.1	baseline	-	8维度基线评估，主要短板：检查点缺失、资源整合弱、边界条件不足	dry_run
+2026-04-15T10:05	bak-001	topiclab	55.1	-	keep	边界条件	补充watcha.cn产品评价CDP说明和已知限制	dry_run
+2026-04-15T10:05	bak-001	web-access	74.1	-	keep	指令具体性	watcha.cn站点经验更新：补充input事件触发方式	dry_run
