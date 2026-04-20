@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // ziliu-publish.cjs - 字流发布工具
-const API_KEY = 'ziliu_sk_988d4115bd6d68c44b6f1cbb55c7b0f08656a025d1c1d887';
+const API_KEY=process.env.ZILIU_API_KEY || '';
 const BASE = 'https://ziliu.online/api';
 
 async function request(path, method = 'POST', body = null, isForm = false) {
