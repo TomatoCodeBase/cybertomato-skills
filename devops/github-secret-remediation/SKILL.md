@@ -57,6 +57,13 @@ grep -rn --include="*.md" --include="*.yaml" --include="*.json" --include="*.py"
 
 **Key insight:** `.env` files often contain full secrets that appear truncated in docs/logs — always check `.env` files directly.
 
+**⚠️ Critical pitfall — `read_file` and `cat` truncate long secret values in display:**
+Hermes `read_file` and shell `cat` may show `ziliu_...d887` (truncated) when the file actually contains the full `ziliu_sk_988d4115bd6d68c44b6f1cbb55c7b0f08656a025d1c1d887`. **Always verify with `xxd`:**
+```bash
+xxd FILEPATH | grep -i "secret_pattern"
+```
+This is the only reliable way to confirm a secret has been fully removed. `grep -c` counts are also unreliable if the display layer truncates. When in doubt, use `xxd` + hex inspection.
+
 ### 3. Clean working tree
 
 - For 1-2 files: use `patch` tool for precise replacements
@@ -245,5 +252,5 @@ git push origin main --force
 - Always check `.env` files — they often contain full secrets that appear truncated in docs/logs
 - After filter-repo + force push, **always test old commit SHAs** to confirm they're inaccessible
 - When setting repo description via CDP on Windows/MINGW64, **never pass raw Chinese through eval pipes** — it gets GBK-corrupted. Use `decodeURIComponent("%E8%B5%9B%E5%8D%9A...")` instead. Same fix for any non-ASCII content via CDP eval.
-- After recreating a repo, verify the About/description shows correctly — CDP-injected Chinese may appear as `??????` on the page. Fix by re-setting via `decodeURIComponent` + the repo description settings popover (click gear → `#repo_description` input → `button[type=submit]` "Save changes").
-- `gh repo edit` to fix description may 403 if PAT lacks repo admin scope — use browser CDP as fallback.
+- `grep -c` and `read_file` may show 0 matches due to display truncation — **verify with `xxd FILEPATH | grep -i "pattern"`** before declaring a file clean. This caught a full `ziliu_sk_` API key that `read_file` showed as `ziliu_...d887`.
+- When `patch` tool says "Could not find a match" but `read_file` shows the text exists, it's likely the tool's fuzzy matcher sees the full string while display truncates it. Use `write_file` to rewrite the entire file as a workaround.

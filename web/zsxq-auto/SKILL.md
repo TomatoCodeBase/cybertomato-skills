@@ -45,10 +45,10 @@ curl -s -X POST "http://localhost:3456/click?target={targetId}" -d '.menu-contai
 #### 4a. API提取（推荐首选）⚡
 
 ⚠️ **认证方式选择**（两种都可能有效，取决于CDP环境，必须先测试）：
-- **方式A：fetch + credentials:'include' + Origin/Referer头** — 2026-04-19实测成功（sync XHR反而1059）。需带 `Origin: https://wx.zsxq.com` 和 `Referer: https://wx.zsxq.com/` 头
-- **方式B：同步 XHR**（`XMLHttpRequest` + `x.withCredentials=true`）— 历史上稳定，但2026-04-19实测返回1059
+- **方式A：fetch + credentials:'include' + Origin/Referer头** — 2026-04-19/20/21均实测成功。需带 `Origin: https://wx.zsxq.com` 和 `Referer: https://wx.zsxq.com/` 头。**2026-04-21已成为首选方式**
+- **方式B：同步 XHR**（`XMLHttpRequest` + `x.withCredentials=true`）— 历史上稳定，但2026-04-19起实测持续返回1059（内部错误）。作为备选
 
-**关键**：两种都试，哪种能用用哪种。如果都返回1059，说明cookie过期，需要用户重新登录wx.zsxq.com。
+**关键**：两种都试，哪种能用用哪种。如果都返回1059，说明cookie过期，需要用户重新登录wx.zsxq.com。**2026-04-21趋势**：fetch+Promise.all 已连续3天成功，作为首选；sync XHR 作为备选。
 
 ⚠️ **fetch 会话快速过期**（2026-04-19）：fetch API 认证在页面加载后有效但短时间内会过期（第二次独立 eval 调用可能返回空数组）。**必须用 Promise.all 一次性发所有请求**，缓存结果到 `window.__zsxq_raw`，再逐批提取。不要分多次 eval 调用 fetch。
 
@@ -309,7 +309,7 @@ function extractTitle(tp){
 - `type=solution` 或 `type=q&a` 且 text<50字 → 纯提问
 - 任何 text<30字 → 水帖/打卡
 - `type=task` → 无标题，丢弃
-- **标题关键词过滤**（2026-04-19 新增）：标题含"打卡"、"签到"、"报到" → 打卡水帖，丢弃。注意用标题而非text判断，因为text可能有150+字但仍是水帖
+- **标题关键词过滤**（2026-04-19 新增，2026-04-21 扩展）：标题含"打卡"、"签到"、"报到"、"中奖"、"收到礼物" → 水帖/破局好事类，丢弃。注意用标题而非text判断，因为text可能有150+字但仍是水帖
 - **同作者同标题去重**：同一作者在同一天内发多条标题相同的帖子时，保留text最长的那条，短的删除（实测44分钟内同作者同标题发两帖，短帖151字是长帖1833字的子集）
 
 ### Step 5: 写入飞书多维表格

@@ -344,10 +344,10 @@ fetch(`https://www.zhihu.com/api/v4/answers/${answerId}/comments`, {
 24. **Answer ID 从 data-zop 提取**：回答的 DOM 元素有 `data-zop` 属性（JSON 字符串），其中 `itemId` 即为 answer_id，用于评论 API
 25. **赞同按钮需 scrollIntoView**：赞同按钮常在视口外（getBoundingClientRect 返回负 y 值），需先 `scrollIntoView({block:"center"})` 再点击
 26. **按钮索引定位法**：知乎按钮 innerText 含零宽字符（U+200B）和换行符，文本匹配不稳定。更可靠方式是 `[...document.querySelectorAll('button')]` 取全部按钮数组，按索引定位目标按钮（先用 `/eval` 列出所有按钮的 index + innerText 确认索引号）
-27. **发布按钮必须用 CDP `/click` 点击**：`el.click()` 和 `dispatchEvent(MouseEvent)` 能让发布按钮变"发布中"但实际不发 API 请求（Draft.js 内部 state 为空时，JS 点击只触发视觉反馈）。用 CDP `/click` 端点才能完整触发布尔逻辑
+27. **想法发布按钮：所有点击方式（click/clickAt/el.click()）均无效（2026-04-21 XHR拦截器确认）**：当 Draft.js React state 为空（isTrusted:false ClipboardEvent 导致），无论用 JS `el.click()`、CDP `/click`、还是 CDP `/clickAt`，发布按钮都只产生视觉反馈（按钮变色/文字变化），但不发送任何 API 请求。XHR 拦截器证实：零个 pin/draft 请求。根因不是点击方式，而是知乎前端逻辑检查到 Draft.js state 为空后拒绝提交。⚠️ 回答编辑器的"发布回答"按钮（button index 51+）无可靠 CSS 选择器，只能用索引定位——此时需确保 Draft.js 内容正确写入（避免 selectAll+delete 损坏 state），否则任何点击方式也无法提交（2026-04-20 实战）
 28. **发布按钮 CSS 选择器用组合类名**：`button.Button--blue` 可能匹配页面上多个蓝色按钮（如导航按钮），点击后返回空文本且实际未触发发布。可靠选择器：`button.Button--blue.Button--secondary`（2026-04-12 实战验证）
 29. **发布后编辑器弹窗可能不关闭**：从创作中心发想法，点击发布后按钮经历"发布→发布中→发布"变化，但编辑器弹窗（Draft.js）可能保持打开，hasEditor 仍为 true。这不代表发布失败，需去内容管理页 `/creator/manage/creation/pin` 验证（2026-04-12）
-28. **不要对 Draft.js 编辑器 selectAll + delete 后再 paste**：清空操作会破坏 Draft.js EditorState，后续 ClipboardEvent paste 无法生效。编辑器有残留内容时直接 paste 即可（会替换）
+28. **不要对 Draft.js 编辑器 selectAll + delete 后再 paste/insertText**：清空操作会破坏 Draft.js EditorState，后续无论 ClipboardEvent paste 还是 execCommand insertText 都会出问题。想法编辑器：paste 后无法生效；回答编辑器：insertText 后 DOM 显示正确内容（331字）但提交失败（按钮"发布中..."→恢复原状）。**回答编辑器 insertText 失败（截断）后，不要尝试清除重写，应直接放弃该次写入**，换问题页重新打开编辑器，或切换到发想法（2026-04-20 回答编辑器实战）
 29. **Hermes 终端执行 Node.js 脚本报 `stdin is not a tty`**：终端环境的 BASH_ENV 配置导致 `node script.js` 失败。解决方式：`BASH_ENV=\"\" /c/Program\\ Files/nodejs/node.exe script.js`，或在非 TTY 环境直接用 curl 逐条调用 CDP API 而非 Node.js 脚本
 30. **⚠️ 创作中心"发想法"按钮打开的是文章编辑器，不是想法编辑器**：创作中心 `/creator` 首页有个"发想法"按钮（css-1hj0j6m，位于"分享此刻的想法..."输入区域旁），点击后实际打开的是**文章编辑器**（有"标题" textarea），不是想法编辑器！不要用这个按钮发想法（2026-04-13 实战验证）
 31. **想法编辑器推荐入口：`?writepin`**：在当前 tab 用 `window.location.href = "https://www.zhihu.com/?writepin"` 导航（不要用 CDP `/navigate` 端点，可能不生效）。页面会弹出 Modal 弹窗含 Draft.js 编辑器。编辑器选择器 `.public-DraftEditor-content`，位于 `.Modal-wrapper` 容器内（2026-04-13 实战验证）
@@ -357,6 +357,7 @@ fetch(`https://www.zhihu.com/api/v4/answers/${answerId}/comments`, {
 34. **clickAt 响应文本是点击瞬间快照，非最终状态**：`clickAt` 返回 `{"text":"立即报名"}` 但随后 `querySelector` 查询同一元素 innerText 为"已报名"。clickAt 的 text 字段是点击时刻的 DOM 快照，SPA 状态更新是异步的。判断操作是否生效必须用单独的 `/eval` 查询元素实际文本，不能依赖 clickAt 响应中的 text（2026-04-13 实战）
 35. **API 评论成功 ≠ 打卡页立即反映**：通过 `fetch /api/v4/answers/{aid}/comments` 发评论成功（返回 comment ID），但返回打卡页查看任务进度仍显示"去评论"和 2/3。可能原因：打卡页 SPA 内存状态不会因外部 API 操作自动刷新；或评论所在问题不在打卡页推荐列表中不被计入。最终以创作中心 `/creator` 的「本周打卡天数」为准——发评论后直接去创作中心验证，不必反复回打卡页确认（2026-04-13 实战）
 36. **发布按钮粘贴后需手动触发 React 状态更新**：ClipboardEvent paste 写入内容后，发布按钮（button.css-wfbczc）仍为 disabled。需 `editor.click(); editor.focus(); editor.dispatchEvent(new Event("input", {bubbles: true}));` 触发 React onChange 回调，按钮才会变为 enabled（2026-04-13 实战）
+37. **想法发布按钮必须用 CDP `/clickAt`（isTrusted:true）**：发布按钮 `button.css-wfbczc.Button--blue.Button--secondary` 在 Modal 内，CDP `/click`（JS el.click()，isTrusted:false）只触发视觉反馈（按钮变色）但不发送 API 请求，内容不会发布。必须用 `/clickAt`（CDP Input.dispatchMouseEvent，isTrusted:true）才能完整触发提交逻辑（2026-04-21 实战：`/click` 失败，`/clickAt` 成功，内容管理页验证通过）
 39. **CDP `/navigate` 端点不可靠，用 `window.location.href` 替代**：从创作中心页面用 CDP `/navigate` 导航到其他 URL（如 `/?writepin`）可能不生效（URL 不变）。改用 `/eval` 执行 `window.location.href = "https://www.zhihu.com/?writepin"` 更可靠。新 tab 创建（`/new`）也可能停在 `about:blank`，不建议用新 tab 方式导航知乎页面（2026-04-13 实战）
 40. **评论 DOM 回退方案（API 失败时）**：API 评论（`POST /api/v4/answers/{aid}/comments`）可能返回 404 或认证错误（缺少 z_c0 token 时）。DOM 回退流程：① 点击 `button.ContentItem-action` 含"N 条评论"展开评论区 → ② 点击"回复"按钮展开回复编辑器 → ③ 回复编辑器是 `editors[1]`（index 1，index 0 是写回答编辑器）→ ④ `editor.focus(); document.execCommand('insertText', false, text)` 写入 → ⑤ 从 editor 向上遍历 parentElement 找到含"发布"按钮的容器（约 depth 6）→ ⑥ 按钮从 disabled 变为 enabled 后点击（2026-04-14 实战）
 41. **`/pins/create` 是死链接**：`https://www.zhihu.com/pins/create` 返回空白页面（bodyLen≈20），不要用这个 URL 创建想法（2026-04-14 实战）
@@ -366,6 +367,32 @@ fetch(`https://www.zhihu.com/api/v4/answers/${answerId}/comments`, {
 44. **execCommand insertText 多段落文本在回答编辑器中被截断（2026-04-18）**：写入627字（3段，\n\n分隔）后 innerText 只剩最后一段156字。短文本（~200字单段）也出现写入416字但 innerText 仅208字的差异。发布按钮变"发布中"但不提交（与想法编辑器同一 Draft.js 状态同步问题）
 45. **"写回答"按钮在发布失败后消失（2026-04-18）**：在同一问题页尝试写回答后点发布（按钮变"发布中"），实际未提交。刷新或重新导航回该问题后，"写回答"按钮消失（可能系统认为已有草稿/回答）。需换一个问题页重新操作
 46. **仅互动任务即可完成打卡（2026-04-18 验证）**：完成赞同+评论+关注3个互动任务后，创作中心显示"今日已打卡成功"，未完成任何创作任务。如果写回答/发想法遇到 Draft.js 状态问题，优先确保3个互动任务完成即可
+
+---
+
+## 一键打卡脚本
+
+```bash
+# 完整打卡（互动+创作+验证）
+python zhihu-auto/scripts/zhihu_daka.py
+
+# 仅互动任务（3/3，通常足够完成打卡）
+python zhihu-auto/scripts/zhihu_daka.py --interact-only
+
+# 自定义想法内容
+python zhihu-auto/scripts/zhihu_daka.py --content "你的想法内容，至少60字"
+
+# 自定义评论内容
+python zhihu-auto/scripts/zhihu_daka.py --comment "你的评论，至少10字"
+```
+
+脚本流程（6步，单次执行）：
+1. 热榜找 AI 相关问题（优先匹配 AI/科技关键词）
+2. 赞同回答（DOM click）
+3. API 评论（fetch POST，比 DOM 操作可靠）
+4. API 关注作者（fetch POST）
+5. 发想法（`?writepin` + ClipboardEvent paste，备用：仅互动任务也够打卡）
+6. 创作中心验证打卡天数
 
 ---
 
@@ -453,13 +480,15 @@ updated: 2026-04-13
 - **删除想法 API**：`DELETE /api/v4/pins/{pin_id}`，用法同删除回答，返回 `{success:true}`（2026-04-14 实战）
 - **⚠️ execCommand('selectAll') + insertText 在 Draft.js 想法编辑器中会导致内容倒序**：内容首尾拼接（开头变成原文末尾，末尾变成原文开头），617字内容只剩标签行。原因是 selectAll 后 Draft.js 光标位置行为异常。**正确方法**：确保编辑器为空状态下直接 `insertText`（不做 selectAll），或使用 ClipboardEvent paste（2026-04-14 实战，连续3次复现）
 - **⚠️ innerHTML 设置 Draft.js 内容不触发 React 状态更新**：`editor.innerHTML = html` 后 innerText 显示正确内容（617 chars），但发布按钮保持 disabled。Draft.js 的内部 EditorState 不感知 DOM 直接变更。必须用 execCommand 或 ClipboardEvent 写入（2026-04-14 实战）
-- **⚠️ 想法发布在 2026-04-16 全面失效（深度调试结论）**：
+- **⚠️ 想法发布在 2026-04-16 全面失效，2026-04-21 再次确认（含 XHR 拦截器诊断）**：
   - **ClipboardEvent paste 产生乱码**：`isTrusted:false` 被 Draft.js 识别，内容写入后每个字符变成独立段落（逐字 `<br>`）。之前 2026-04-14 成功是因为 Draft.js 版本或运行环境差异。已验证：paste 事件的 `clipboardData.getData()` 正确返回内容，但 `isTrusted:false` 导致 Draft.js 处理逻辑异常
   - **execCommand insertText 写入 DOM 和底层 EditorState 但不更新 PinCreateForm**：DOM 显示 710 字、Draft.js Plugin Editor 的 `getEditorState().getCurrentContent().getPlainText()` 返回 710 字，但发布按钮点击后无网络请求发出。原因是 PinCreateForm 组件的 React state 不感知底层 Draft.js 的变更
   - **直接调用 onChange/props.onChange 无效**：找到 Draft.js Plugin Editor（`stateNode` at fiber depth=4）并调用 `pluginEditor.onChange(es)` 和 `props.onChange(es)` 均不触发 PinCreateForm 重新渲染。React 批处理机制阻止了非事件流中的状态传播
   - **API 直发全部失败**：`POST /api/v4/pins` JSON `{content:"..."}` → 400 "Missing argument content"；JSON `{data:{content:"..."}}` → 400；form-urlencoded → 403（需签名头 `x-zse-93/96`）
   - **可用的 Fiber 调试路径**：`editor.__reactFiber$xxx` → depth=3 `stateNode` = Draft.js Plugin Editor（有 `_latestEditorState`、`getEditorState`、`onChange`）→ depth=4 的 `memoizedProps.editorState` 有 `[native code]` 的 onChange（useState setter 包装）
-  - **结论：当前无法通过 CDP proxy 可靠发布想法**。唯一可靠方案：(1) 手动在浏览器中粘贴内容并点击发布，或 (2) 逆向知乎签名算法后直接调 API，或 (3) 用 Playwright/Puppeteer 直连 Chrome（绕过 CDP proxy，可产生 isTrusted:true 的事件）
+  - **clickAt 同样无效（2026-04-21 XHR拦截器确认）**：挂载 XHR+fetch 拦截器后，clickAt 返回 `{clicked:true}`，但拦截器捕获到零个 pin/draft API 请求（仅一个 analytics 埋点）。发布按钮 enabled 但点击后不发请求。结论：**问题不在点击方式（click/clickAt），而在 Draft.js React state 为空**——无论用哪种点击，知乎前端逻辑检查到 state 为空就不提交
+  - **结论：当前无法通过 CDP proxy 可靠发布想法**。唯一可靠方案：(1) 手动在浏览器中粘贴内容并点击发布（内容可提前写入DOM，用户 Ctrl+A → Ctrl+V 覆盖粘贴 + 点击发布，约10秒），或 (2) 逆向知乎签名算法后直接调 API，或 (3) 用 Playwright/Puppeteer 直连 Chrome（绕过 CDP proxy，可产生 isTrusted:true 的事件）
+  - **调试技巧：XHR拦截器诊断发布是否真正提交**：在页面注入 `XMLHttpRequest.prototype.open` 和 `window.fetch` 拦截器，记录所有请求的 method/url/status。点击发布后检查是否有 pin/draft 相关请求，可100%确定是"前端没提交"还是"提交了但失败"
 - **⚠️ 发布按钮"失败"但内容实际已提交**：发布按钮变为"发布中"再恢复原状，前端表现为失败，但某些情况下内容已成功提交到后端。反复重试会产生大量重复/乱码想法（2026-04-16 实战：一次会话产生了 8 条想法，6 条乱码 + 2 条正常）。**发布后务必导航到 `/creator/manage/creation/pin` 检查实际发布情况，不要仅以按钮状态判断**
 - **批量删除想法**：在 `/eval` 中用 `Promise.all(ids.map(id => fetch('/api/v4/pins/' + id, {method:'DELETE', credentials:'include'})))` 批量删除。注意已删除的想法在管理页可能仍显示（缓存），刷新页面后消失。删除不存在的想法返回 `{"error":{"code":"ForbiddenError"}}` 而非 `{"success":true}`
 - **想法 API 直发确认不可用**：`POST /api/v4/pins` 传 JSON `{content: "..."}` 返回 `"Missing argument content"`（400），传 form-urlencoded `content=...` 结果未知（被中断）。`/api/v4/pinsV2` 返回 404。Draft.js 编辑器仍是唯一发布通道（2026-04-16 再次验证）

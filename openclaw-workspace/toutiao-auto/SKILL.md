@@ -110,6 +110,21 @@ document.querySelector('.forum-list-item').click();
 | 文章发布 | `https://mp.toutiao.com/profile_v4/graphic/publish` |
 | 草稿箱 | `https://mp.toutiao.com/profile_v4/manage/draft-list` |
 
+## 快速发布（一键脚本）
+
+当只需发布微头条且内容已准备好时，使用一键脚本避免逐个 CDP 调用：
+
+```bash
+python "D:/HermesData/.hermes/skills/openclaw-workspace/toutiao-auto/scripts/toutiao_publish.py" "第一段\n\n第二段\n\n#AI #话题"
+```
+
+脚本自动完成：创建tab → 等待加载 → 写入内容 → 点击发布 → 验证结果 → 关闭tab。
+相比手动逐步调用 CDP，从 14+ 次工具调用压缩到 1 次。
+
+前置：CDP Proxy 运行中，Chrome 已登录头条号。
+
+> **不需要加载 web-access**：一键脚本直接调 CDP Proxy API（localhost:3456），是自包含的。web-access 的 CDP 封装在此场景下多余。
+
 ## 注意事项
 
 ### 已知限制

@@ -20,26 +20,35 @@ description: |
 
 - Obsidian 运行中 + Local REST API 插件启用（端口 27123）
 - 环境变量 `OBSIDIAN_API_KEY`
-- 日记模板文件存在：`D:\cybertomato\00-个人日记\番茄日记\番茄日记模板.md`
+- 日记模板目录：`D:\\cybertomato\\00-个人日记\\番茄日记\\`
+
+## 模板文件路径
+
+| 模板 | 路径 |
+|------|------|
+| 工作 | `D:\\cybertomato\\00-个人日记\\番茄日记\\番茄日记模板（工作）.md` |
+| 日常 | `D:\\cybertomato\\00-个人日记\\番茄日记\\番茄日记模板（日常）.md` |
+| 通用 | `D:\\cybertomato\\00-个人日记\\番茄日记\\番茄日记模板.md` |
+
+用户说"工作日记"→ 用工作模板；"日记"/"日常日记"→ 用通用/日常模板。
 
 ## 功能一：创建日记
 
-### 执行流程
+### 执行流程（Obsidian REST API）
 
-1. 运行脚本：`node {SKILL_DIR}/scripts/create-diary.cjs [YYYY-MM-DD]`
-2. 脚本自动完成：
-   - 检查 Obsidian API（端口 27123）
-   - 检查日记是否已存在（已存在则打开，不覆盖）
-   - 从磁盘读取模板
-   - 替换日期占位符（`YYYY-MM-DD` → 实际日期）
-   - 写入到：`00-个人日记/番茄日记/{date}.md`
-   - 在 Obsidian 中打开文件
+**首选方案**：通过 Obsidian Local REST API（localhost:27123）一步完成，不依赖脚本文件。
+
+1. REST API `GET` 读取对应模板（URL 编码中文路径）
+2. 替换 `YYYY-MM-DD` → 实际日期
+3. REST API `PUT` 写入日记文件（`Content-Type: text/markdown`）
+4. Obsidian URI `obsidian://open?vault=cybertomato&file=...` 打开文件
+
+完整代码见下方「⚠️ 已知问题 & 推荐方案」章节。
 
 ### 输出说明
 
-- `CREATED` → 新建成功 → "✓ 日记已创建：{日期}"
-- `EXISTS` → 已存在 → "✓ 今天的日记已存在，已打开"
-- `ERROR` → API不可用 → 提示用户打开 Obsidian
+- Python 无报错（exit_code=0）→ 创建成功 → "✓ 日记已创建：{日期}"
+- 连接失败 → 提示用户打开 Obsidian
 
 ### 三种模板模式
 
@@ -100,6 +109,55 @@ description: |
 - 时间前置，四位格式（08:00）
 - 分隔符用 `丨`
 - 任务描述要具体
+
+## ⚠️ 已知问题 & 推荐方案
+
+- **`create-diary.cjs` 脚本为空文件**（0 bytes），不要使用。
+- **Obsidian CLI `--help` 会超时**，但 `open` 命令可正常使用。
+- **Windows MINGW64 环境下**：`read_file` 可能返回空或超时，terminal 输出可能全部被吞。此时 Python 脚本仍可执行（无输出但无报错），但无法验证结果。
+
+### 推荐方案：Obsidian Local REST API（首选）
+
+**当 `read_file`/terminal 输出不可用时，Obsidian REST API 是最可靠的绕行路径。** 前提是 Obsidian 已运行（本来就是前置条件）。
+
+```python
+import urllib.request, os, sys
+from datetime import date
+from urllib.parse import quote
+
+api_key = os.environ.get('OBSIDIAN_API_KEY', '')
+base = 'http://localhost:27123/vault/'
+
+# 1. 读取模板（URL 编码中文路径，safe='/'保留斜杠）
+tpl_path = quote('00-个人日记/番茄日记/番茄日记模板（工作）.md', safe='/')
+req = urllib.request.Request(base + tpl_path)
+if api_key: req.add_header('Authorization', f'Bearer {api_key}')
+resp = urllib.request.urlopen(req, timeout=5)
+template = resp.read().decode('utf-8')
+
+# 2. 替换日期
+today = date.today().isoformat()
+content = template.replace('YYYY-MM-DD', today)
+
+# 3. 写入日记（PUT + Content-Type）
+out_path = quote(f'00-个人日记/番茄日记/{today}.md', safe='/')
+req2 = urllib.request.Request(base + out_path, data=content.encode('utf-8'), method='PUT')
+req2.add_header('Content-Type', 'text/markdown')
+if api_key: req2.add_header('Authorization', f'Bearer {api_key}')
+urllib.request.urlopen(req2, timeout=5)
+
+# 4. 在 Obsidian 中打开
+import subprocess
+uri = f'obsidian://open?vault=cybertomato&file={quote(f"00-个人日记/番茄日记/{today}.md")}'
+subprocess.run(['cmd', '/c', 'start', uri], timeout=10)
+```
+
+### 关键教训
+
+- **永远不要凭空编造模板内容**——必须从实际模板文件读取。`read_file` 不可用时就用 REST API。
+- **REST API 优先于 Obsidian CLI `read` 命令**——CLI read 输出也被 terminal 吞掉，而 REST API 可在 Python 内完成全流程无需输出。
+- Python `urllib.request` 是标准库，无需额外依赖。
+- **terminal 前台输出全部为空时**，用 `background=true` 启动命令 + `process(action="wait")` 读取输出，这是获取终端输出的可靠兜底方案。
 
 ## 注意事项
 

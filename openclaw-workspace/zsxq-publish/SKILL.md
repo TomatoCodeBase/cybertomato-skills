@@ -252,6 +252,23 @@ Angular 输入框必须用 nativeSetter。querySelector('input[placeholder="..."
 
 ### Step 4: 注入正文
 
+**Step 4b: 大内容注入（>8KB）**
+
+用 `md_to_zsxq_html.py --js` 生成注入 JS 文件，然后通过 CDP eval 发送文件：
+```bash
+curl -s -X POST "http://localhost:3456/eval?target=$TID" \
+  -H "Content-Type: text/plain" \
+  --data-binary @inject.js
+```
+注入 JS 返回 `undefined` 是正常的（赋值语句无 return），但内容实际已写入。验证用 `el.innerText.length`。
+
+**Step 2b: Unicode 标题处理**
+
+MINGW64 shell 会破坏 curl 中的中文字符。标题必须用 URL 编码 + decodeURIComponent：
+```javascript
+nativeSetter.call(inp, decodeURIComponent('%E7%95%AA%E8%8C%84AI...'));
+```
+
 **ProseMirror 编辑器**：直接设置 innerHTML + input 事件
 **Quill 编辑器**：必须用剪贴板粘贴方式（否则 delta 模型不同步）：
 
@@ -290,6 +307,58 @@ POST https://api.zsxq.com/v2/groups/{groupId}//topics，带上签名头。
 
 发布成功后页面跳转到 articles.zsxq.com/id_xxxx.html
 
+## Chrome 扩展方案（2026-04-21）
+
+路径：`D:\HermesData\.hermes\zsxq-publisher-extension`
+
+Manifest V3 Chrome 扩展，双模式：popup 手动操作 + Hermes CDP eval 通过 `window.postMessage` 调用。
+
+### 架构
+
+```
+CDP eval (main world) ──window.postMessage──→ content script (isolated world) ──fetch API──→ api.zsxq.com
+popup.html ──chrome.runtime.sendMessage──→ background.js ──chrome.tabs.sendMessage──→ content.js
+```
+
+### Hermes 调用方式（替代 7 步 CDP 流程）
+
+```javascript
+(function(){
+  return new Promise(function(resolve){
+    var reqId = 'pub-' + Date.now();
+    var handler = function(e){
+      if(e.data && e.data.__zsxq_ext_response && e.data.__request_id === reqId){
+        window.removeEventListener('message', handler);
+        resolve(JSON.stringify(e.data.result));
+      }
+    };
+    window.addEventListener('message', handler);
+    window.postMessage({
+      __zsxq_ext: true,
+      __request_id: reqId,
+      action: 'publish',
+      params: { groupId: '28885124282121', title: '标题', content: 'Markdown内容', contentFormat: 'markdown' }
+    }, '*');
+    setTimeout(function(){ window.removeEventListener('message', handler); resolve('TIMEOUT'); }, 10000);
+  });
+})()
+```
+
+### Content Script 隔离世界关键限制
+
+- Content script 运行在 isolated world，**无法访问页面 JS 全局变量**（CryptoJS、Z()、MD5 函数等）
+- 必须在 content.js 中**内置 MD5 实现**（不能依赖页面已加载的加密库）
+- `window.postMessage` 可以跨世界通信（CDP eval 在 main world，content script 在 isolated world，但 postMessage 互通）
+- `window.__zsxq_publisher_ready` 等挂载在 content script 全局的变量对 CDP eval 不可见（不同 world）
+- 安装扩展后需要**刷新**知识星球页面才能加载 content script
+
+### 验证状态
+
+- [x] postMessage 通道 ping 成功（2026-04-21）
+- [x] Hermes CDP eval → postMessage → content script 响应正常
+- [ ] API 直发发布（待修复：需内置 MD5）
+- [ ] Popup 手动操作
+
 ## 已知坑
 
 1. **-d vs --data-binary**：大 JS 用 -d 会因特殊字符报 Uncaught，必须用 --data-binary
@@ -304,9 +373,11 @@ POST https://api.zsxq.com/v2/groups/{groupId}//topics，带上签名头。
 10. **编辑页加载时序**：标题 input 先出现，ProseMirror 编辑器后出现（差2-3秒）
 11. **浏览器可能是 headless**：screenX/Y/outerW/H=0 时 OS 级鼠标模拟不可行
 12. **Quill 编辑器注入**：直接设置 innerHTML 不会同步 Quill delta 模型。用剪贴板粘贴方式（DataTransfer + ClipboardEvent）。**paste 前必须 `ql.focus()`**，否则 paste 事件不会被编辑器接收
-13. **Quill 切换 Markdown 流程（2026-04-19 更新）**：toggle-mode.richText 按钮的触发方式不稳定，/click 和 clickAt 行为可能随 Angular 版本变化。2026-04-19 实测可靠流程：clickAt `.toggle-mode.richText` → sleep 2s → 弹出 dialog-container → clickAt `.dialog-container .confirm`（注意：用 `.dialog-container .confirm` 而非 `div.confirm`，前者更精确可靠）。如果 clickAt 切换按钮未触发弹窗，尝试 `/click`（JS .click()）。切换后验证：`.ql-editor` 消失、`.ProseMirror` 出现
+13. **Quill 切换 Markdown 流程（2026-04-21 更新）**：toggle-mode.richText 按钮的触发方式不稳定。2026-04-21 实测：`/click`（JS .click()）比 clickAt 更可靠触发弹窗。流程：`/click .toggle-mode.richText` → sleep 3s → 弹出 dialog-container → clickAt `div.confirm`。如果 `/click` 也未触发，再试 clickAt。切换后验证：`.ql-editor` 消失、`.ProseMirror` 出现。标题 input 在切换后可能延迟出现（placeholder="请在这里输入标题"）
+13b. **Markdown 模式持久化**：切换一次后浏览器会记住，再次打开同星球编辑页直接就是 ProseMirror（无 Quill、无 toggle 按钮）。不需要每次都切
 14. **避免 toggle 的备选方案：直接在 Quill 中 paste（2026-04-19）**：当 toggle 切换不稳定时，可以不切 Markdown，直接在 Quill 编辑器中 paste HTML 注入。流程：`document.querySelector('.ql-editor').focus()` → 构造 ClipboardEvent paste → 注入。注意：此方案 paste 成功但 Angular 状态同步可能有延迟，发布按钮可能仍为 disabled，需验证后再发布
 15. **CDP /eval Content-Type**：`-d` 默认发 application/x-www-form-urlencoded，对纯 JS 代码通常没问题；但如果 JS 内容含 `=` 或 `&` 字符会被解析，此时用 `--data-binary` + `-H "Content-Type: text/plain"` 更安全
+16. **发布按钮选择器（2026-04-21）**：发布按钮 class 是 `post btn`（空格分隔），CSS 选择器 `div.post.btn` 匹配不到。可靠选择器：`div.post`。clickAt 能命中（返回 clicked:true）但 Angular 有时不响应跳转——原因未明，可能与同日重复发布同星球有关。首发不受此影响，重发需用户手动点发布
 
 ## 星球导航
 
