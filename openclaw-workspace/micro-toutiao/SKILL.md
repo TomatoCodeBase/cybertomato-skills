@@ -6,7 +6,7 @@ version: 1.0.0
 
 # 微头条生成技能
 
-> 前置依赖：`ai-daily-report-merge` 产出的融合日报。
+> 前置依赖：融合日报（优先）或自动日报（回退）。路径：`Ai融合日报` > `AI热点日报`
 
 ## 核心原则
 
@@ -79,7 +79,9 @@ version: 1.0.0
 
 ## 输入路径
 
-融合日报：`D:\cybertomato\03-内容工厂\日报\Ai融合日报\YYYY-MM-DD-番茄AI热点日报.md`
+优先读取融合日报：`D:\cybertomato\03-内容工厂\日报\Ai融合日报\YYYY-MM-DD-番茄AI热点日报.md`
+
+无融合日报时，回退到自动日报：`D:\cybertomato\03-内容工厂\日报\AI热点日报\YYYY-MM-DD-AI热点日报.md`
 
 ## 10W+ 爆文规律（从头条科技领域10W+学习提炼）
 
