@@ -16,6 +16,14 @@ description: |
 - **表名**: 技能清单
 - **Table ID**: `tbloJevtPScX147y`
 
+## GitHub 代码仓
+
+- **仓库**: https://github.com/TomatoCodeBase/cybertomato-skills
+- **技能目录**: `openclaw-workspace/<skill-name>/`
+- **SKILL路径格式**: `https://github.com/TomatoCodeBase/cybertomato-skills/tree/main/openclaw-workspace/<skill-name>`
+
+**所有自建技能的 SKILL路径 必须使用 GitHub 地址，不使用本地路径。** 如果技能不在 GitHub 上，先上传再录入。
+
 ## 字段映射
 
 | 字段名 | 类型 | 说明 |
@@ -27,7 +35,7 @@ description: |
 | 状态 | select | `启用` / `禁用` / `待审核` / `已废弃` |
 | 触发词 | text | 触发关键词，逗号分隔 |
 | 适用平台 | select | `Claude Code` / `OpenClaw` / `AutoClaw` |
-| SKILL路径 | text | 相对路径，如 `~/.openclaw-autoclaw/skills/<name>/SKILL.md` |
+| SKILL路径 | text | GitHub URL，如 `https://github.com/TomatoCodeBase/cybertomato-skills/tree/main/openclaw-workspace/<name>` |
 | 质量评分 | number | 1-10 |
 | 依赖 | text | 依赖的工具/环境/API |
 
@@ -41,6 +49,7 @@ description: |
 - `metadata.openclaw.requires.env` → 依赖
 - 正文中的触发词/关键词 → 触发词
 
+本地读取路径：
 ```bash
 SKILL_PATH="$env:USERPROFILE\.openclaw-autoclaw\skills\<skill-name>\SKILL.md"
 ```
@@ -50,7 +59,21 @@ SKILL_PATH="$env:USERPROFILE\.openclaw-autoclaw\skills\<skill-name>\SKILL.md"
 Get-ChildItem -Path "$env:USERPROFILE\.openclaw-autoclaw\skills" -Directory -Filter "*<keyword>*"
 ```
 
-### 2. 判断分类
+### 2. 检查 GitHub 是否已有该技能
+
+```bash
+git -C <repo_path> ls-tree main openclaw-workspace/<skill-name>
+```
+
+**如果不存在**，先上传到 GitHub：
+```bash
+cp -r ~/.openclaw-autoclaw/skills/<skill-name>/ <repo_path>/openclaw-workspace/<skill-name>/
+cd <repo_path> && git add . && git commit -m "feat: add <skill-name>" && git push
+```
+
+仓库 clone 路径：`C:\Users\FIREBAT\.openclaw-autoclaw\workspace\cybertomato-skills`
+
+### 3. 判断分类
 
 根据 description 和功能关键词匹配分类：
 - 涉及飞书API → `飞书`
@@ -67,7 +90,7 @@ Get-ChildItem -Path "$env:USERPROFILE\.openclaw-autoclaw\skills" -Directory -Fil
 - 排版/PPT/格式 → `排版`
 - 无法归类 → `其他`
 
-### 3. 检查重复
+### 4. 检查重复
 
 写入前先搜索是否已存在同名记录：
 ```bash
@@ -76,12 +99,14 @@ lark-cli base +record-search --base-token MFJLbw5M1anokWsdJGmc9U4gn9f --table-id
 
 如果已存在，询问用户是更新还是跳过。
 
-### 4. 写入记录
+### 5. 写入记录
 
 使用 lark-cli 写入（**不用 feishu_bitable 工具**，该工具依赖 openclaw-lark 插件，可能不可用）：
 
 ```python
 import subprocess, json
+
+github_base = "https://github.com/TomatoCodeBase/cybertomato-skills/tree/main/openclaw-workspace"
 
 data = json.dumps({
     "技能名称": "<name>",
@@ -91,7 +116,7 @@ data = json.dumps({
     "状态": "启用",
     "触发词": "<triggers>",
     "适用平台": "<platform>",
-    "SKILL路径": "<path>",
+    "SKILL路径": f"{github_base}/<name>",
     "质量评分": <score>,
     "依赖": "<dependencies>"
 }, ensure_ascii=False)
@@ -107,7 +132,7 @@ result = subprocess.run(
 
 **⚠️ PowerShell 编码陷阱**：PowerShell 会把 JSON 中的中文拆成多个参数。必须用 Python `subprocess` 调用 lark-cli，不能直接在 PowerShell 中传 `--json`。
 
-### 5. 更新记录（如需修改）
+### 6. 更新记录（如需修改）
 
 ```python
 result = subprocess.run(
@@ -120,7 +145,7 @@ result = subprocess.run(
 )
 ```
 
-### 6. 删除记录
+### 7. 删除记录
 
 ```python
 result = subprocess.run(
@@ -139,7 +164,8 @@ result = subprocess.run(
 1. 扫描 `~/.openclaw-autoclaw/skills/` 下所有目录
 2. 逐个读取 SKILL.md frontmatter
 3. 跳过已存在的（按技能名称去重）
-4. 批量写入，每条确认
+4. 检查 GitHub 是否已有，没有则先上传
+5. 批量写入，每条确认
 
 ## 质量评分参考
 
