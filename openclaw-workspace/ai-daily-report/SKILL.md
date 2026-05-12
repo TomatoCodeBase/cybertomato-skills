@@ -16,7 +16,6 @@ argument-hint: "[YYYY-MM-DD]（可选，默认今天）"
 
 ```
 Step 1: 读配置 → 数据源列表、accounts
-Step 1.5: Tier 0.5 - AIHOT精选 + 公众号爆文
 Step 2: Tier 1 采集 → AIbase + 站长之家 + 36氪
 Step 3: 去重合并
 Step 4: Tier 2 补充 → web_search + x_search + 海外源
@@ -41,8 +40,6 @@ Step 11: 管线接检查（必做）
 | The Verge AI | https://www.theverge.com/ai-artificial-intelligence | 2.5 | 跳过（国内被墙） | - |
 | VentureBeat AI | https://venturebeat.com/category/ai/ | 2.5 | CDP，提取`<a>`中的文章链接 | - |
 | Hacker News | https://news.ycombinator.com/ | 2.5 | Firebase API | - |
-| AIHOT精选 | https://aihot.virxact.com/ | 0.5 | browser snapshot，提取文章卡片 | references/aihot.virxact.com.md |
-| AIHOT公众号爆文 | https://aihot.virxact.com/mp | 0.5 | browser snapshot，提取爆文列表 | references/aihot-mp.virxact.com.md |
 
 - **⛔ 每条新闻必须提取原文链接**：采集列表页时，解析 HTML 中的 `<a href>` 标签，拿到每条新闻的具体文章 URL（如 AIbase 的 `/news/12345`、站长之家的完整文章链接）。禁止用列表页 URL 作为来源链接。如果列表页 HTML 中没有独立文章链接，则用 web_fetch 抓取文章详情页获取链接。
 - Tier 1 提取80%+内容，Tier 2 搜索补充海外重大事件前5条
@@ -159,16 +156,6 @@ write_file(path="D:/cybertomato/03-内容工厂/日报/AI热点日报/YYYY-MM-DD
 ```
 
 降级用 Obsidian REST API（localhost:27123），需 `Bearer $OBSIDIAN_API_KEY`，中文路径用 Node.js encodeURIComponent。
-
-## AIHOT采集 (Tier 0.5)
-
-AIHOT是「数字生命卡兹克」运营的AI热点聚合站，监控168个精选信源（OpenAI/Anthropic官方博客、X/Twitter大佬、arXiv等），经AI评分+精选后展示。优先于Tier 1采集。
-
-采集方式：browser snapshot获取结构化数据，提取每条信息卡片的标题/评分/标签/推荐理由/原文链接。
-精选页: https://aihot.virxact.com/ 
-公众号爆文页: https://aihot.virxact.com/mp
-
-融合规则：AIHOT条目按标签融入日报对应板块，标注 [AIHOT:XX分]。公众号爆文作为国内动态补充。推荐分>=75优先S/A级。同一事件以AIHOT推荐理由为选题角度。
 
 
 ## Step 10：管线接检查（不可跳过）
