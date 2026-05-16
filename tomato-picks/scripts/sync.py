@@ -49,8 +49,6 @@ a{color:inherit;text-decoration:none}
 .card-meta{display:flex;gap:6px;flex-wrap:wrap}
 .tag{font-size:11px;padding:2px 8px;border-radius:3px}
 .tag-cat{background:var(--paper-deep);color:var(--ink-mid)}
-.tag-free{background:#E8F0E4;color:#3D6B35}
-.tag-freepay{background:#F0EDE4;color:#8B6F3A}
 .tag-platform{background:transparent;color:var(--gray-light);border:1px solid var(--gray-border)}
 .card-link{position:absolute;inset:0;z-index:1}
 .footer{text-align:center;padding:28px 32px;color:var(--gray-light);font-size:12px;border-top:1px solid var(--gray-border);font-family:var(--serif)}
@@ -68,8 +66,8 @@ a{color:inherit;text-decoration:none}
 <script>
 var tools=__TOOLS__;
 var catColors=__CAT_COLORS__;
-function freeTag(f){if(f==='免费')return '<span class="tag tag-free">免费</span>';if(f==='免费+付费')return '<span class="tag tag-freepay">免费+付费</span>';return ''}
-function render(filter){var g=document.getElementById('grid');var list=filter==='all'?tools:tools.filter(function(t){return t.cat===filter});if(!list.length){g.innerHTML='<div class="empty">该分类暂无工具</div>';return}g.innerHTML=list.map(function(t){var c=catColors[t.cat]||'#1B365D';var init=t.name.charAt(0);return '<div class="card"><a class="card-link" href="'+t.link+'" target="_blank" rel="noopener"></a><div class="card-head"><div class="card-icon" style="background:'+c+'">'+init+'</div><div class="card-name">'+t.name+'</div></div><div class="card-desc">'+t.desc+'</div><div class="card-meta"><span class="tag tag-cat">'+t.cat+'</span>'+(t.platform?'<span class="tag tag-platform">'+t.platform+'</span>':'')+freeTag(t.free)+'</div></div>'}).join('')}
+function freeTag(f){return ''}
+function render(filter){var g=document.getElementById('grid');var list=filter==='all'?tools:tools.filter(function(t){return t.cat===filter});if(!list.length){g.innerHTML='<div class="empty">该分类暂无工具</div>';return}g.innerHTML=list.map(function(t){var c=catColors[t.cat]||'#1B365D';var init=t.name.charAt(0);return '<div class="card"><a class="card-link" href="'+t.link+'" target="_blank" rel="noopener"></a><div class="card-head"><div class="card-icon" style="background:'+c+'">'+init+'</div><div class="card-name">'+t.name+'</div></div><div class="card-desc">'+t.desc+'</div><div class="card-meta"><span class="tag tag-cat">'+t.cat+'</span>'+(t.platform?'<span class="tag tag-platform">'+t.platform+'</span>':'')+'</div></div>'}).join('')}
 var cats=['all'];tools.forEach(function(t){if(cats.indexOf(t.cat)<0)cats.push(t.cat)});
 var tabsEl=document.getElementById('tabs');cats.forEach(function(c){var d=document.createElement('div');d.className='tab'+(c==='all'?' active':'');d.dataset.cat=c;d.textContent=c==='all'?'全部':c;d.addEventListener('click',function(){document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active')});this.classList.add('active');render(this.dataset.cat)});tabsEl.appendChild(d)});
 render('all');
